@@ -1,2 +1,2 @@
 # theano-to-tf
-Converting an RNN from Theano framework to Tensorflow
+Converting an LSTM from Theano framework to Tensorflow
