@@ -16,7 +16,6 @@ def getNumberOfCodes(sets):
   return (highestCode + 1)
 
 def load_data():
-  print(ARGS.inputFileRadical)
   main_trainSet = pickle.load(open(ARGS.inputFileRadical+'.train', 'rb'))
   print("-> " + str(len(main_trainSet)) + " patients at dimension 0 for file: "+ ARGS.inputFileRadical + ".train dimensions ")
   main_testSet = pickle.load(open(ARGS.inputFileRadical+'.test', 'rb'))
