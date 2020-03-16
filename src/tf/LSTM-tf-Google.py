@@ -1,8 +1,53 @@
+import pickle
 import argparse
 from collections import OrderedDict
 
 global ARGS
 global tPARAMS
+
+def getNumberOfCodes(sets):
+  highestCode = 0
+  for set in sets:
+    for pat in set:
+      for adm in pat:
+        for code in adm:
+          if code > highestCode:
+            highestCode = code
+  return (highestCode + 1)
+
+def load_data():
+  print(ARGS.inputFileRadical)
+  main_trainSet = pickle.load(open(ARGS.inputFileRadical+'.train', 'rb'))
+  print("-> " + str(len(main_trainSet)) + " patients at dimension 0 for file: "+ ARGS.inputFileRadical + ".train dimensions ")
+  main_testSet = pickle.load(open(ARGS.inputFileRadical+'.test', 'rb'))
+  print("-> " + str(len(main_testSet)) + " patients at dimension 0 for file: "+ ARGS.inputFileRadical + ".test dimensions ")
+  print("Note: these files carry 3D tensor data; the above numbers refer to dimension 0, dimensions 1 and 2 have irregular sizes.")
+
+  ARGS.numberOfInputCodes = getNumberOfCodes([main_trainSet,main_testSet])
+  print('Number of diagnosis input codes: ' + str(ARGS.numberOfInputCodes))
+
+  #uses the same data for testing, but disregarding the fist admission of each patient
+  labels_trainSet = pickle.load(open(ARGS.inputFileRadical+'.train', 'rb'))
+  labels_testSet = pickle.load(open(ARGS.inputFileRadical+'.test', 'rb'))
+
+  train_sorted_index = sorted(range(len(main_trainSet)), key=lambda x: len(main_trainSet[x]))  #lambda x: len(seq[x]) --> f(x) return len(seq[x])
+  main_trainSet = [main_trainSet[i] for i in train_sorted_index]
+  labels_trainSet = [labels_trainSet[i] for i in train_sorted_index]
+
+  test_sorted_index = sorted(range(len(main_testSet)), key=lambda x: len(main_testSet[x]))
+  main_testSet = [main_testSet[i] for i in test_sorted_index]
+  labels_testSet = [labels_testSet[i] for i in test_sorted_index]
+
+  trainSet = [main_trainSet, labels_trainSet]
+  testSet = [main_testSet, labels_testSet]
+
+  return trainSet, testSet
+
+
+def train_model():
+  print('==> data loading')
+  trainSet, testSet = load_data()
+  previousDimSize = ARGS.numberOfInputCodes
 
 
 def parse_arguments():
@@ -27,4 +72,4 @@ if __name__ == '__main__':
   global ARGS
   ARGS = parse_arguments()
 
-  # train_model()
+  train_model()
