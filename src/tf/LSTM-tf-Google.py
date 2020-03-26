@@ -1,9 +1,9 @@
 import pickle
 import argparse
 from collections import OrderedDict
+import tensorflow as tf
 
 global ARGS
-global tPARAMS
 
 def getNumberOfCodes(sets):
   highestCode = 0
@@ -14,6 +14,18 @@ def getNumberOfCodes(sets):
           if code > highestCode:
             highestCode = code
   return (highestCode + 1)
+
+def LSTM_cell(layerSize):
+  cell = tf.keras.layers.LSTMCell(layerSize)
+  return cell
+
+def build_model(lstmCells):
+  inputs = tf.keras.Input((1, ARGS.numberOfInputCodes))
+  x = tf.keras.layers.RNN(lstmCells)(inputs)
+  model = tf.keras.models.Model(inputs, x)
+  print(model.summary())
+  model.compile(optimizer='Adadelta', loss='mse')
+  return model
 
 def load_data():
   main_trainSet = pickle.load(open(ARGS.inputFileRadical+'.train', 'rb'))
@@ -46,7 +58,11 @@ def load_data():
 def train_model():
   print('==> data loading')
   trainSet, testSet = load_data()
-  previousDimSize = ARGS.numberOfInputCodes
+  print('=>> creating lstm cell')
+  print('Using neuron type Long Short-Term Memory by Zen et. al (Google)')
+  lstmCells = [LSTM_cell(layerSize) for layerSize in ARGS.hiddenDimSize]
+  print('==> model building')
+  model = build_model(lstmCells)
 
 
 def parse_arguments():
