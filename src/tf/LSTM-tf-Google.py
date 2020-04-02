@@ -1,3 +1,4 @@
+import os
 import random
 import pickle
 import argparse
@@ -6,6 +7,12 @@ import tensorflow as tf
 import numpy as np
 
 global ARGS
+
+def unzip(zipped):
+  new_params = OrderedDict()
+  for key, value in zipped.items():
+    new_params[key] = value.get_value()
+  return new_params
 
 def getNumberOfCodes(sets):
   highestCode = 0
@@ -38,20 +45,10 @@ def prepareHotVectors(train_tensor, labels_tensor):
   nVisitsOfEachPatient_List = np.array(nVisitsOfEachPatient_List, dtype=np.float64)
   return x_hotvectors_tensorf, y_hotvectors_tensor, mask, nVisitsOfEachPatient_List
 
-def LSTM_cell(layerSize):
-  cell = tf.keras.layers.LSTMCell(layerSize)
-  return cell
-
-def build_model(lstmCells):
-  inputs = tf.keras.Input((ARGS.batchSize, ARGS.numberOfInputCodes))
-
-  # numero variavel de tamanhos de inputs
-  # ver arquitetura pronta de theano rnn
-
-  x = tf.keras.layers.RNN(lstmCells)(inputs)
-  model = tf.keras.models.Model(inputs, x)
-  # print(model.summary())
-  model.compile(optimizer='Adadelta', loss='mse')
+def build_model():
+  model = tf.keras.models.Sequential()
+  model.add(tf.keras.layers.LSTM(ARGS.numberOfInputCodes, return_sequences=True))
+  model.compile(optimizer='Adadelta', loss='categorical_crossentropy') #checar loss
   return model
 
 def load_data():
@@ -81,20 +78,38 @@ def load_data():
 
   return trainSet, testSet
 
+#the performance computation uses the test data and returns the cross entropy measure
+def performEvaluation(test_model, test_Set):
+  batchSize = ARGS.batchSize
+
+  n_batches = int(np.ceil(float(len(test_Set[0])) / float(batchSize))) #default batch size is 100
+  crossEntropySum = 0.0
+  dataCount = 0.0
+  #computes de crossEntropy for all the elements in the test_Set, using the batch scheme of partitioning
+  for index in range(n_batches):
+    batchX = test_Set[0][index * batchSize:(index + 1) * batchSize]
+    batchY = test_Set[1][index * batchSize:(index + 1) * batchSize]
+    xf, y, mask, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
+    # crossEntropy = TEST_MODEL_COMPILED(xf, y, mask, nVisitsOfEachPatient_List)
+    crossEntropy = test_model.fit(x=xf, y=y)
+
+    #accumulation by simple summation taking the batch size into account
+    crossEntropySum += crossEntropy.history['loss'][0] * len(batchX)
+    dataCount += float(len(batchX))
+    #At the end, it returns the mean cross entropy considering all the batches
+  return n_batches, crossEntropySum / dataCount
 
 def train_model():
   print('==> data loading')
   trainSet, testSet = load_data()
-  print('=>> creating lstm cell')
-  print('Using neuron type Long Short-Term Memory by Zen et. al (Google)')
-  lstmCells = [LSTM_cell(layerSize) for layerSize in ARGS.hiddenDimSize]
   print('==> model building')
-  model = build_model(lstmCells)
+  model = build_model()
 
   print('==> training and validation')
   batchSize = ARGS.batchSize
   n_batches = int(np.ceil(float(len(trainSet[0])) / float(batchSize)))
   # TEST_MODEL_COMPILED = theano.function(inputs=[xf, y, mask, nVisitsOfEachPatient_List], outputs=MODEL, name='TEST_MODEL_COMPILED')
+  test_model = build_model()
 
   bestValidationCrossEntropy = 1e20
   bestValidationEpoch = 0
@@ -103,6 +118,7 @@ def train_model():
   iImprovementEpochs = 0
   iConsecutiveNonImprovements = 0
   epoch_counter = 0
+
   for epoch_counter in range(ARGS.nEpochs):
     iteration = 0
     trainCrossEntropyVector = []
@@ -111,7 +127,36 @@ def train_model():
       batchY = trainSet[1][index*batchSize:(index+1)*batchSize]
       xf, y, mask, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
       xf += np.random.normal(0, 0.1, xf.shape)  #add gaussian noise as a means to reduce overfitting
-      print(np.shape(xf), np.shape(y), np.shape(mask), np.shape(nVisitsOfEachPatient_List))
+      trainCrossEntropy = model.fit(x=xf, y=y)
+      trainCrossEntropyVector.append(trainCrossEntropy.history['loss'][0])
+      iteration += 1
+
+    print('-> Epoch: %d, mean cross entropy considering %d TRAINING batches: %f' % (epoch_counter, n_batches, np.mean(trainCrossEntropyVector)))
+    nValidBatches, validationCrossEntropy = performEvaluation(test_model, testSet)
+    print('      mean cross entropy considering %d VALIDATION batches: %f' % (nValidBatches, validationCrossEntropy))
+    if validationCrossEntropy < bestValidationCrossEntropy:
+      iImprovementEpochs += 1
+      iConsecutiveNonImprovements = 0
+      bestValidationCrossEntropy = validationCrossEntropy
+      bestValidationEpoch = epoch_counter
+
+      tempParams = unzip(tPARAMS)
+      if os.path.exists(bestModelFileName):
+        os.remove(bestModelFileName)
+      np.savez_compressed(ARGS.outFile + '.' + str(epoch_counter), **tempParams)
+      bestModelFileName = ARGS.outFile + '.' + str(epoch_counter) + '.npz'
+    else:
+      print('Epoch ended without improvement.')
+      iConsecutiveNonImprovements += 1
+    if iConsecutiveNonImprovements > ARGS.maxConsecutiveNonImprovements: #default is 10
+      break
+  #Best results
+  print('--------------SUMMARY--------------')
+  print('The best VALIDATION cross entropy occurred at epoch %d, the value was of %f ' % (bestValidationEpoch, bestValidationCrossEntropy))
+  print('Best model file: ' + bestModelFileName)
+  print('Number of improvement epochs: ' + str(iImprovementEpochs) + ' out of ' + str(epoch_counter+1) + ' possible improvements.')
+  print('Note: the smaller the cross entropy, the better.')
+  print('-----------------------------------')
 
 def parse_arguments():
   parser = argparse.ArgumentParser()
