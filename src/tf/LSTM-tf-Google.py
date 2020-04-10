@@ -1,18 +1,12 @@
 import os
 import random
 import pickle
+import shutil
 import argparse
-from collections import OrderedDict
 import tensorflow as tf
 import numpy as np
 
 global ARGS
-
-def unzip(zipped):
-  new_params = OrderedDict()
-  for key, value in zipped.items():
-    new_params[key] = value.get_value()
-  return new_params
 
 def getNumberOfCodes(sets):
   highestCode = 0
@@ -23,6 +17,7 @@ def getNumberOfCodes(sets):
           if code > highestCode:
             highestCode = code
   return (highestCode + 1)
+
 
 def prepareHotVectors(train_tensor, labels_tensor):
   nVisitsOfEachPatient_List = np.array([len(seq) for seq in train_tensor]) - 1
@@ -45,11 +40,31 @@ def prepareHotVectors(train_tensor, labels_tensor):
   nVisitsOfEachPatient_List = np.array(nVisitsOfEachPatient_List, dtype=np.float64)
   return x_hotvectors_tensorf, y_hotvectors_tensor, mask, nVisitsOfEachPatient_List
 
+
 def build_model():
   model = tf.keras.models.Sequential()
-  model.add(tf.keras.layers.LSTM(ARGS.numberOfInputCodes, return_sequences=True))
+  
+  for layer in range(len(ARGS.hiddenDimSize)):
+    model.add(tf.keras.layers.LSTM(ARGS.hiddenDimSize[layer], return_sequences=True, dtype="float64"))
+
+  model.add(tf.keras.layers.Dropout(rate=ARGS.dropoutRate, dtype="float64"))
+  model.add(tf.keras.layers.Dense(ARGS.numberOfInputCodes, activation="relu", dtype="float64"))
+  model.add(tf.keras.layers.Activation("softmax", dtype="float64"))
+
   model.compile(optimizer='Adadelta', loss='categorical_crossentropy') #checar loss
+
+  # model = tf.keras.models.Sequential()
+  # model.add(tf.keras.layers.LSTM(ARGS.numberOfInputCodes, return_sequences=True, dtype="float64"))
+  # model.add(tf.keras.layers.Dropout(rate=ARGS.dropoutRate, dtype="float64"))
+  
+  # for layer in range(len(ARGS.hiddenDimSize)):
+  #   model.add(tf.keras.layers.Dense(ARGS.hiddenDimSize[layer], input_shape=(846,), activation="relu", dtype="float64"))
+  
+  # model.add(tf.keras.layers.Activation("softmax", dtype="float64"))
+  # model.compile(optimizer='Adadelta', loss='categorical_crossentropy') #checar loss
+
   return model
+
 
 def load_data():
   main_trainSet = pickle.load(open(ARGS.inputFileRadical+'.train', 'rb'))
@@ -78,6 +93,7 @@ def load_data():
 
   return trainSet, testSet
 
+
 #the performance computation uses the test data and returns the cross entropy measure
 def performEvaluation(test_model, test_Set):
   batchSize = ARGS.batchSize
@@ -90,7 +106,6 @@ def performEvaluation(test_model, test_Set):
     batchX = test_Set[0][index * batchSize:(index + 1) * batchSize]
     batchY = test_Set[1][index * batchSize:(index + 1) * batchSize]
     xf, y, mask, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
-    # crossEntropy = TEST_MODEL_COMPILED(xf, y, mask, nVisitsOfEachPatient_List)
     crossEntropy = test_model.fit(x=xf, y=y)
 
     #accumulation by simple summation taking the batch size into account
@@ -98,6 +113,7 @@ def performEvaluation(test_model, test_Set):
     dataCount += float(len(batchX))
     #At the end, it returns the mean cross entropy considering all the batches
   return n_batches, crossEntropySum / dataCount
+
 
 def train_model():
   print('==> data loading')
@@ -108,7 +124,6 @@ def train_model():
   print('==> training and validation')
   batchSize = ARGS.batchSize
   n_batches = int(np.ceil(float(len(trainSet[0])) / float(batchSize)))
-  # TEST_MODEL_COMPILED = theano.function(inputs=[xf, y, mask, nVisitsOfEachPatient_List], outputs=MODEL, name='TEST_MODEL_COMPILED')
   test_model = build_model()
 
   bestValidationCrossEntropy = 1e20
@@ -127,7 +142,12 @@ def train_model():
       batchY = trainSet[1][index*batchSize:(index+1)*batchSize]
       xf, y, mask, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
       xf += np.random.normal(0, 0.1, xf.shape)  #add gaussian noise as a means to reduce overfitting
+      mask = tf.convert_to_tensor(mask, dtype=bool)
+      model.compute_mask(inputs=xf, mask=mask)
       trainCrossEntropy = model.fit(x=xf, y=y)
+
+      # print(model.summary())
+
       trainCrossEntropyVector.append(trainCrossEntropy.history['loss'][0])
       iteration += 1
 
@@ -140,11 +160,12 @@ def train_model():
       bestValidationCrossEntropy = validationCrossEntropy
       bestValidationEpoch = epoch_counter
 
-      tempParams = unzip(tPARAMS)
       if os.path.exists(bestModelFileName):
-        os.remove(bestModelFileName)
-      np.savez_compressed(ARGS.outFile + '.' + str(epoch_counter), **tempParams)
-      bestModelFileName = ARGS.outFile + '.' + str(epoch_counter) + '.npz'
+        print(bestModelFileName)
+        shutil.rmtree(bestModelFileName, ignore_errors=True)
+      bestModelFileName = ARGS.outFile + '.' + str(epoch_counter) + '/'
+      tf.keras.models.save_model(model, bestModelFileName)
+
     else:
       print('Epoch ended without improvement.')
       iConsecutiveNonImprovements += 1
@@ -157,6 +178,7 @@ def train_model():
   print('Number of improvement epochs: ' + str(iImprovementEpochs) + ' out of ' + str(epoch_counter+1) + ' possible improvements.')
   print('Note: the smaller the cross entropy, the better.')
   print('-----------------------------------')
+
 
 def parse_arguments():
   parser = argparse.ArgumentParser()
@@ -174,9 +196,8 @@ def parse_arguments():
   ARGStemp.hiddenDimSize = hiddenDimSize
   return ARGStemp
 
+
 if __name__ == '__main__':
-  global tPARAMS
-  tPARAMS = OrderedDict()
   global ARGS
   ARGS = parse_arguments()
 
