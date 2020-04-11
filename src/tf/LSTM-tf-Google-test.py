@@ -29,7 +29,10 @@ def prepareHotVectors(test_tensor):
 def loadModel():
   model = tf.keras.models.load_model(ARGS.modelPath, compile=True)
   # ARGS.numberOfInputCodes = model['W_f0'].shape[0]
+  # ARGS.numberOfInputCodes = model.layers[0].input_shape[-1]
+  # print(model.layers[0].input_shape)
   ARGS.numberOfInputCodes = 846
+
   return model
 
 
