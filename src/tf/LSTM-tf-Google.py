@@ -40,28 +40,26 @@ def prepareHotVectors(train_tensor, labels_tensor):
   nVisitsOfEachPatient_List = np.array(nVisitsOfEachPatient_List, dtype=np.float64)
   return x_hotvectors_tensorf, y_hotvectors_tensor, mask, nVisitsOfEachPatient_List
 
-
 def build_model():
   model = tf.keras.models.Sequential()
-  
-  for layer in range(len(ARGS.hiddenDimSize)):
-    model.add(tf.keras.layers.LSTM(ARGS.hiddenDimSize[layer], return_sequences=True, dtype="float64"))
+  model.add(tf.keras.layers.InputLayer(input_shape=(None, ARGS.numberOfInputCodes)))
 
-  model.add(tf.keras.layers.Dropout(rate=ARGS.dropoutRate, dtype="float64"))
-  model.add(tf.keras.layers.Dense(ARGS.numberOfInputCodes, activation="relu", dtype="float64"))
+  for layer in range(len(ARGS.hiddenDimSize)):
+    model.add(tf.keras.layers.LSTM(ARGS.hiddenDimSize[layer], return_sequences=True, dropout=ARGS.dropoutRate, dtype="float64"))
+
+  model.add(tf.keras.layers.Dense(ARGS.numberOfInputCodes, activation="relu", activity_regularizer=tf.keras.regularizers.l2(ARGS.LregularizationAlpha), dtype="float64"))
   model.add(tf.keras.layers.Activation("softmax", dtype="float64"))
 
-  model.compile(optimizer='Adadelta', loss='categorical_crossentropy') #checar loss
+  model.compile(optimizer="Adadelta", loss="categorical_crossentropy")
+  print(model.summary())
 
-  # model = tf.keras.models.Sequential()
-  # model.add(tf.keras.layers.LSTM(ARGS.numberOfInputCodes, return_sequences=True, dtype="float64"))
-  # model.add(tf.keras.layers.Dropout(rate=ARGS.dropoutRate, dtype="float64"))
-  
-  # for layer in range(len(ARGS.hiddenDimSize)):
-  #   model.add(tf.keras.layers.Dense(ARGS.hiddenDimSize[layer], input_shape=(846,), activation="relu", dtype="float64"))
-  
-  # model.add(tf.keras.layers.Activation("softmax", dtype="float64"))
-  # model.compile(optimizer='Adadelta', loss='categorical_crossentropy') #checar loss
+  # inputs  = tf.keras.Input(shape=(None, ARGS.numberOfInputCodes))
+  # lstm    = tf.keras.layers.LSTM(ARGS.hiddenDimSize[0], return_sequences=True, dtype="float64", dropout=ARGS.dropoutRate)(inputs)
+  # dense   = tf.keras.layers.Dense(ARGS.numberOfInputCodes, activation="relu", dtype="float64")(lstm)
+  # output  = tf.keras.layers.Activation("softmax", dtype="float64")(dense)
+  # model   = tf.keras.models.Model(inputs, output)
+  # print(model.summary())
+  # model.compile(optimizer="Adadelta", loss="categorical_crossentropy")
 
   return model
 
@@ -106,7 +104,11 @@ def performEvaluation(test_model, test_Set):
     batchX = test_Set[0][index * batchSize:(index + 1) * batchSize]
     batchY = test_Set[1][index * batchSize:(index + 1) * batchSize]
     xf, y, mask, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
-    crossEntropy = test_model.fit(x=xf, y=y)
+    mask = tf.convert_to_tensor(mask, dtype=bool)
+    xf = tf.convert_to_tensor(xf, dtype="float64")
+    y = tf.convert_to_tensor(y, dtype="float64")
+    test_model.compute_mask(inputs=xf, mask=mask)
+    crossEntropy = test_model.fit(x=xf, y=y, verbose=0)
 
     #accumulation by simple summation taking the batch size into account
     crossEntropySum += crossEntropy.history['loss'][0] * len(batchX)
@@ -143,10 +145,10 @@ def train_model():
       xf, y, mask, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
       xf += np.random.normal(0, 0.1, xf.shape)  #add gaussian noise as a means to reduce overfitting
       mask = tf.convert_to_tensor(mask, dtype=bool)
+      xf = tf.convert_to_tensor(xf, dtype="float64")
+      y = tf.convert_to_tensor(y, dtype="float64")
       model.compute_mask(inputs=xf, mask=mask)
-      trainCrossEntropy = model.fit(x=xf, y=y)
-
-      # print(model.summary())
+      trainCrossEntropy = model.fit(x=xf, y=y, verbose=0)
 
       trainCrossEntropyVector.append(trainCrossEntropy.history['loss'][0])
       iteration += 1
