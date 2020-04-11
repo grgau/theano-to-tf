@@ -45,11 +45,11 @@ def build_model():
   model.add(tf.keras.layers.InputLayer(input_shape=(None, ARGS.numberOfInputCodes)))
 
   for layer in range(len(ARGS.hiddenDimSize)):
-    model.add(tf.keras.layers.LSTM(ARGS.hiddenDimSize[layer], return_sequences=True, dropout=ARGS.dropoutRate, dtype="float64"))
-
-  model.add(tf.keras.layers.Dense(ARGS.numberOfInputCodes, activation="relu", activity_regularizer=tf.keras.regularizers.l2(ARGS.LregularizationAlpha), dtype="float64"))
-  model.add(tf.keras.layers.Activation("softmax", dtype="float64"))
-
+    model.add(tf.keras.layers.LSTM(ARGS.hiddenDimSize[layer], return_sequences=True, dtype="float64"))
+    model.add(tf.keras.layers.Dropout(rate=ARGS.dropoutRate))
+  
+  model.add(tf.keras.layers.Dense(ARGS.numberOfInputCodes, activation="softmax", dtype="float64"))
+  model.add(tf.keras.layers.ActivityRegularization(l2=ARGS.LregularizationAlpha))
   model.compile(optimizer="Adadelta", loss="categorical_crossentropy")
   print(model.summary())
 
