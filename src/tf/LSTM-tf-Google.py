@@ -5,6 +5,7 @@ import shutil
 import argparse
 import tensorflow as tf
 import numpy as np
+from datetime import datetime
 
 global ARGS
 
@@ -48,7 +49,8 @@ def build_model():
     model.add(tf.keras.layers.LSTM(ARGS.hiddenDimSize[layer], return_sequences=True, dtype="float64"))
     model.add(tf.keras.layers.Dropout(rate=ARGS.dropoutRate))
   
-  model.add(tf.keras.layers.Dense(ARGS.numberOfInputCodes, activation="softmax", dtype="float64"))
+  model.add(tf.keras.layers.Dense(ARGS.numberOfInputCodes, activation="relu", dtype="float64"))
+  model.add(tf.keras.layers.Softmax())
   model.add(tf.keras.layers.ActivityRegularization(l2=ARGS.LregularizationAlpha))
   model.compile(optimizer="Adadelta", loss="categorical_crossentropy")
   print(model.summary())
@@ -108,6 +110,10 @@ def performEvaluation(test_model, test_Set):
     xf = tf.convert_to_tensor(xf, dtype="float64")
     y = tf.convert_to_tensor(y, dtype="float64")
     test_model.compute_mask(inputs=xf, mask=mask)
+
+    # logDir="logs/fit/validation/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+    # tensorboardCallback = tf.keras.callbacks.TensorBoard(log_dir=logDir)
+    # crossEntropy = test_model.fit(x=xf, y=y, verbose=0, callbacks=[tensorboardCallback])
     crossEntropy = test_model.fit(x=xf, y=y, verbose=0)
 
     #accumulation by simple summation taking the batch size into account
@@ -148,6 +154,10 @@ def train_model():
       xf = tf.convert_to_tensor(xf, dtype="float64")
       y = tf.convert_to_tensor(y, dtype="float64")
       model.compute_mask(inputs=xf, mask=mask)
+
+      # logDir="logs/fit/training/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+      # tensorboardCallback = tf.keras.callbacks.TensorBoard(log_dir=logDir)
+      # trainCrossEntropy = model.fit(x=xf, y=y, verbose=0, callbacks=[tensorboardCallback])
       trainCrossEntropy = model.fit(x=xf, y=y, verbose=0)
 
       trainCrossEntropyVector.append(trainCrossEntropy.history['loss'][0])
