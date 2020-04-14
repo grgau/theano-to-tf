@@ -41,57 +41,6 @@ def prepareHotVectors(train_tensor, labels_tensor):
   nVisitsOfEachPatient_List = np.array(nVisitsOfEachPatient_List, dtype=np.int32)
   return x_hotvectors_tensorf, y_hotvectors_tensor, mask, nVisitsOfEachPatient_List
 
-# weight and bais wrappers
-def weight_variable(shape):
-    """
-    Create a weight variable with appropriate initialization
-    :param name: weight name
-    :param shape: weight shape
-    :return: initialized weight variable
-    """
-    initer = tf.truncated_normal_initializer(stddev=0.01)
-    return tf.get_variable('W',
-                           dtype=tf.float32,
-                           shape=shape,
-                           initializer=initer)
-
-def bias_variable(shape):
-    """
-    Create a bias variable with appropriate initialization
-    :param name: bias variable name
-    :param shape: bias variable shape
-    :return: initialized bias variable
-    """
-    initial = tf.constant(0., shape=shape, dtype=tf.float32)
-    return tf.get_variable('b',
-                           dtype=tf.float32,
-                           initializer=initial)
-
-
-def RNN(x, weights, biases, n_hidden, seq_max_len, seq_len):
-    """
-    :param x: inputs of shape [batch_size, max_time, input_dim]
-    :param weights: matrix of fully-connected output layer weights
-    :param biases: vector of fully-connected output layer biases
-    :param n_hidden: number of hidden units
-    :param seq_max_len: sequence maximum length
-    :param seq_len: length of each sequence of shape [batch_size,]
-    """
-    print(x, weights, biases, n_hidden, seq_max_len, seq_len)
-    cell = tf.nn.rnn_cell.BasicRNNCell(n_hidden)
-    outputs, states = tf.nn.dynamic_rnn(cell, x, sequence_length=seq_len, dtype=tf.float32)
-    print(outputs, states)
-
-    # Hack to build the indexing and retrieve the right output.
-    batch_size = tf.shape(outputs)[0]
-    # Start indices for each sample
-    index = tf.range(0, batch_size) * seq_max_len + (seq_len - 1)
-    # Indexing
-    outputs = tf.gather(tf.reshape(outputs, [-1, n_hidden]), index)
-    out = tf.matmul(outputs, weights) + biases
-    return out
-
-
 def load_data():
   main_trainSet = pickle.load(open(ARGS.inputFileRadical+'.train', 'rb'))
   print("-> " + str(len(main_trainSet)) + " patients at dimension 0 for file: "+ ARGS.inputFileRadical + ".train dimensions ")
@@ -119,37 +68,78 @@ def load_data():
 
   return trainSet, testSet
 
+def init_tensors():
+  x = tf.placeholder(tf.float32, [None, None, ARGS.numberOfInputCodes])
+  y = tf.placeholder(tf.float32, [None, None, ARGS.numberOfInputCodes])
+  mask = tf.placeholder(tf.float32, [None, None, ARGS.numberOfInputCodes])
+  return x, y, mask
+
+def LSTMGoogle_layer(inputTensor):
+  layer = {"weights_lstm": tf.Variable(tf.random_normal([ARGS.hiddenDimSize[0], ARGS.numberOfInputCodes])),
+           "biases_lstm": tf.Variable(tf.random_normal([ARGS.numberOfInputCodes]))}
+
+  # def weight_variable(name, shape):
+  #     initial = tf.truncated_normal_initializer(stddev=0.01)
+  #     return tf.get_variable('W_' + name,
+  #                            dtype=tf.float32,
+  #                            shape=shape,
+  #                            initializer=initer)
+
+  # def bias_variable(name, shape):
+  #     initial = tf.constant(0., shape=shape, dtype=tf.float32)
+  #     return tf.get_variable('b_' + name,
+  #                            dtype=tf.float32,
+  #                            initializer=initial)
+
+  # W = weight_variable(name, shape=[in_dim, ARGS.numberOfInputCodes])
+  # b = bias_variable(name, [ARGS.numberOfInputCodes])
+  lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(ARGS.hiddenDimSize[0])
+  outputs, states = tf.nn.dynamic_rnn(lstm_cell, inputTensor, dtype=tf.float32)
+
+  output = tf.matmul(outputs[-1], layer["weights_lstm"]) + layer["biases_lstm"]
+
+  return output
+
+def FC_layer(inputTensor, name):
+  def weight_variable(name, shape):
+      initial = tf.truncated_normal_initializer(stddev=0.01)
+      return tf.get_variable('W_' + name,
+                             dtype=tf.float32,
+                             shape=shape,
+                             initializer=initial)
+
+  def bias_variable(name, shape):
+      initial = tf.constant(0., shape=shape, dtype=tf.float32)
+      return tf.get_variable('b_' + name,
+                             dtype=tf.float32,
+                             initializer=initial)
+
+  in_dim = inputTensor.get_shape()[1]
+  W = weight_variable(name, shape=[in_dim, ARGS.numberOfInputCodes])
+  b = bias_variable(name, [ARGS.numberOfInputCodes])
+  output = tf.matmul(inputTensor, W)
+  output += b
+  output = tf.nn.relu(output)
+  return output
+
+
+def build_model():
+  inputTensor, predictionTensor, maskTensor = init_tensors()
+  lstm_predictions = LSTMGoogle_layer(inputTensor)
+  predictions = FC_layer(lstm_predictions, "FC1")
+  loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=predictions, labels=predictionTensor))
+  optimizer = tf.train.AdadeltaOptimizer().minimize(loss)
+  return optimizer, loss, inputTensor, predictionTensor
 
 def train_model():
   print('==> data loading')
   trainSet, testSet = load_data()
   previousDimSize = ARGS.numberOfInputCodes
 
-  print("==> parameters initialization")
-  input_dim = 846           # input dimension
-  seq_max_len = 30         # sequence maximum length
-  out_dim = 846             # output dimension
-  num_hidden_units = 271   # number of hidden units
-  training_steps = 10000  # Total number of training steps
-  learning_rate = 0.001 # The optimization initial learning rate
-  epochs = 10           # Total number of training epochs
-  batch_size = 100      # Training batch size
-  display_freq = 100    # Frequency of displaying the training results
-
-  x = tf.placeholder(tf.float32, [None, None, input_dim])
-  seqLen = tf.placeholder(tf.int32, [None])
-  y = tf.placeholder(tf.float32, [None, None, out_dim])
-
-  W = weight_variable(shape=[num_hidden_units, out_dim])
-  b = bias_variable(shape=[out_dim])
-
   print("==> model building")
-  pred_out = RNN(x, W, b, num_hidden_units, seq_max_len, seqLen)
-  cost = tf.reduce_mean(tf.square(pred_out - y))
-  train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
-  init = tf.global_variables_initializer()
+  optimizer, cost, x, y = build_model()
 
-  print("==> training and validation")
+  print ("==> training and validation")
   batchSize = ARGS.batchSize
   n_batches = int(np.ceil(float(len(trainSet[0])) / float(batchSize)))
 
@@ -160,38 +150,26 @@ def train_model():
   iImprovementEpochs = 0
   iConsecutiveNonImprovements = 0
   epoch_counter = 0
-  for epoch_counter in range(ARGS.nEpochs):
-    iteration = 0
-    trainCrossEntropyVector = []
 
-    with tf.Session() as sess:
-      sess.run(init)
+  init = (tf.global_variables_initializer(), tf.local_variables_initializer())
+  with tf.Session() as sess:
+    sess.run(init)
 
+    for epoch_counter in range(ARGS.nEpochs):
+      iteration = 0
+      trainCrossEntropyVector = []
       for index in random.sample(range(n_batches), n_batches):
         batchX = trainSet[0][index*batchSize:(index+1)*batchSize]
         batchY = trainSet[1][index*batchSize:(index + 1)*batchSize]
         xf, yf, mask, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
-        xf += np.random.normal(0, 0.1, xf.shape)  #add gaussian noise as a means to reduce overfitting
+        xf += np.random.normal(0, 0.1, xf.shape)
 
-        feed_dict = {x: xf}
-        # print the shape
-        X_seq_shape = sess.run(tf.shape(xf), feed_dict=feed_dict)
-        output_shape = sess.run(tf.shape(output), feed_dict=feed_dict)
-        state_shape = sess.run(tf.shape(state), feed_dict=feed_dict)
-        output_st_shape = sess.run(tf.shape(output_st), feed_dict=feed_dict)
-        print('X_seq shape [batch_size, n_steps, n_inputs]: ', X_seq_shape)
-        print('output shape [batch_size, n_neurons]: ', output_shape)
-        print('state shape [batch_size, n_neurons]: ', state_shape)
-        print('output_st shape [batch_size, n_steps, n_neurons]: ', output_st_shape)
+        if xf.shape[0] == 1: # its not learning sequences of data, in high level too
+          _, trainCrossEntropy = sess.run([optimizer, cost], feed_dict={x: xf, y: yf})
+          trainCrossEntropyVector.append(trainCrossEntropy)
 
-        output_eval, state_eval = sess.run([output, state], feed_dict=feed_dict)
-        print('Is the output of X2 equals to the state?', np.array_equal(output_eval[2], state_eval))
-        # _, trainCrossEntropy = sess.run([train_op, cost], feed_dict={x: xf, y: yf, seqLen: nVisitsOfEachPatient_List})
-        # trainCrossEntropyVector.append(trainCrossEntropy)
-        # iteration += 1
-
-    print("-> Epoch: %d, mean cross entropy considering %d TRAINING batches: %f" % (epoch_counter, n_batches, np.mean(trainCrossEntropyVector)))
-
+        iteration += 1
+      print('-> Epoch: %d, mean cross entropy considering %d TRAINING batches: %f' % (epoch_counter, n_batches, np.mean(trainCrossEntropyVector)))
 
 
 def parse_arguments():
