@@ -1,13 +1,14 @@
 import pickle
 import argparse
+import glob
 import os
-import shutil
 import random
+
 import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 import numpy as np
 
 global ARGS
-tf.disable_v2_behavior()
 
 def getNumberOfCodes(sets):
   highestCode = 0
@@ -92,34 +93,32 @@ def performEvaluation(test_optimizer, test_loss, test_x, test_y, test_mask, test
       #At the end, it returns the mean cross entropy considering all the batches
   return n_batches, crossEntropySum / dataCount
 
-def LSTMGoogle_layer(inputTensor, seqLen, batchSize, name):
-  lstm_stacked = []
-  # layer = {"weights_lstm": tf.Variable(tf.random_normal([ARGS.hiddenDimSize[0], ARGS.numberOfInputCodes])),
-  #          "biases_lstm": tf.Variable(tf.random_normal([ARGS.numberOfInputCodes]))}
+def LSTMGoogle_layer(inputTensor, seqLen, batchSize):
+  layer = {"weights_lstm": tf.Variable(tf.random_normal([ARGS.hiddenDimSize[0], ARGS.numberOfInputCodes])),
+           "biases_lstm": tf.Variable(tf.random_normal([ARGS.numberOfInputCodes]))}
 
-  def weight_variable(name, shape):
-      initial = tf.glorot_uniform_initializer(seed=None, dtype=tf.float32)
-      return tf.get_variable('W' + name,
-                             dtype=tf.float32,
-                             shape=shape,
-                             initializer=initial)
+  # def weight_variable(name, shape):
+  #     initial = tf.truncated_normal_initializer(stddev=0.01)
+  #     return tf.get_variable('W_' + name,
+  #                            dtype=tf.float32,
+  #                            shape=shape,
+  #                            initializer=initer)
 
-  def bias_variable(name, shape):
-      initial = tf.constant(0., shape=shape, dtype=tf.float32)
-      return tf.get_variable('b' + name,
-                             dtype=tf.float32,
-                             initializer=initial)
+  # def bias_variable(name, shape):
+  #     initial = tf.constant(0., shape=shape, dtype=tf.float32)
+  #     return tf.get_variable('b_' + name,
+  #                            dtype=tf.float32,
+  #                            initializer=initial)
 
-  for i, hiddenDimSize in enumerate(ARGS.hiddenDimSize):
-    W = weight_variable(str(i) + name + "_", shape=[hiddenDimSize, ARGS.numberOfInputCodes])
-    b = bias_variable(str(i) + name + "_", shape=[ARGS.numberOfInputCodes])
-    lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(hiddenDimSize)
-    init_state = lstm_cell.zero_state(batchSize, dtype=tf.float32)
-    lstm_stacked.append(lstm_cell)
+  # W = weight_variable(name, shape=[in_dim, ARGS.numberOfInputCodes])
+  # b = bias_variable(name, [ARGS.numberOfInputCodes])
 
-  lstm_stacked = tf.nn.rnn_cell.MultiRNNCell(lstm_stacked) 
-  outputs, states = tf.nn.dynamic_rnn(lstm_stacked, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
-  output = tf.nn.softmax(tf.matmul(outputs[-1], W) + b)
+  lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(ARGS.hiddenDimSize[0])
+  # init_state = lstm_cell.zero_state(batchSize, dtype=tf.float32)
+  # outputs, states = tf.nn.dynamic_rnn(lstm_cell, inputTensor, sequence_length=seqLen, time_major=True, initial_state=init_state, dtype=tf.float32)
+  outputs, states = tf.nn.dynamic_rnn(lstm_cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+
+  output = tf.matmul(outputs[-1], layer["weights_lstm"]) + layer["biases_lstm"]
   return output
 
 def FC_layer(inputTensor, name):
@@ -153,18 +152,20 @@ def build_model(model_name):
     nVisitsOfEachPatient_List = tf.placeholder(tf.float32, [None], name="sequence_length")
     batch_size = tf.placeholder(tf.int32, [], name='batch_size')
 
-    regularizer = tf.keras.regularizers.l2(ARGS.LregularizationAlpha)
+    flowingTensor = xf
 
-    lstm_predictions = LSTMGoogle_layer(xf, nVisitsOfEachPatient_List, batch_size, "LSTM_layer")
+    regularizer = tf.keras.regularizers.l2(ARGS.LregularizationAlpha)
+    lstm_predictions = LSTMGoogle_layer(flowingTensor, nVisitsOfEachPatient_List, batch_size)
     dropout_predictions = tf.nn.dropout(lstm_predictions, rate=ARGS.dropoutRate)
-    predictions = FC_layer(dropout_predictions, "FC_layer")
+    predictions = FC_layer(dropout_predictions, "FC1")
     masked_predictions = predictions * maskf[:, :, None]
     
     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=masked_predictions, labels=yf))
-    loss = tf.math.reduce_mean(cross_entropy / nVisitsOfEachPatient_List)
-    l2_loss = regularizer(loss)
-    optimizer = tf.train.AdadeltaOptimizer().minimize(l2_loss)
-    return optimizer, loss, xf, yf, maskf, nVisitsOfEachPatient_List, batch_size
+    # loss = tf.math.reduce_mean(cross_entropy / nVisitsOfEachPatient_List)
+    # l2_loss = regularizer(loss)
+    
+    optimizer = tf.train.AdadeltaOptimizer().minimize(cross_entropy)
+    return optimizer, cross_entropy, xf, yf, maskf, nVisitsOfEachPatient_List, batch_size
 
 def train_model():
   print("==> data loading")
@@ -188,8 +189,7 @@ def train_model():
   epoch_counter = 0
 
   init = (tf.global_variables_initializer(), tf.local_variables_initializer())
-  saver = tf.train.Saver()
-
+  saver = tf.train.Saver(save_relative_paths=True)
   with tf.Session() as sess:
     sess.run(init)
 
@@ -215,16 +215,17 @@ def train_model():
         bestValidationCrossEntropy = validationCrossEntropy
         bestValidationEpoch = epoch_counter
 
-        if os.path.exists(bestModelFileName):
-          shutil.rmtree(bestModelFileName, ignore_errors=True)
-        bestModelFileName = ARGS.outFile + '.' + str(epoch_counter) + '/'
+        fileList = glob.glob(bestModelFileName + "*")
+        if bestModelFileName != "" and fileList:
+          [os.remove(filePath) for filePath in fileList]
+          os.remove(bestModelFileName.split("/")[0] + "/checkpoint")
+        bestModelFileName = ARGS.outFile + '.' + str(epoch_counter)
         saver.save(sess, bestModelFileName)
       else:
         print('Epoch ended without improvement.')
         iConsecutiveNonImprovements += 1
       if iConsecutiveNonImprovements > ARGS.maxConsecutiveNonImprovements: #default is 10
         break
-    print(tf.all_variables())
   #Best results
   print('--------------SUMMARY--------------')
   print('The best VALIDATION cross entropy occurred at epoch %d, the value was of %f ' % (bestValidationEpoch, bestValidationCrossEntropy))
