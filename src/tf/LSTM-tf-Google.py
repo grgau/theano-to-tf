@@ -69,14 +69,14 @@ def load_data():
 
   return trainSet, testSet
 
-def performEvaluation(test_optimizer, test_loss, test_x, test_y, test_mask, test_seqLen, test_Set, test_batch_size):
+def performEvaluation(loss, x, y, mask, seqLen, batch_size, test_Set):
   batchSize = ARGS.batchSize
 
   n_batches = int(np.ceil(float(len(test_Set[0])) / float(batchSize))) #default batch size is 100
   crossEntropySum = 0.0
   dataCount = 0.0
   #computes de crossEntropy for all the elements in the test_Set, using the batch scheme of partitioning
-  init = (tf.global_variables_initializer(), tf.local_variables_initializer())
+  init = (tf.global_variables_initializer())
   with tf.Session() as sess:
     sess.run(init)
 
@@ -84,8 +84,8 @@ def performEvaluation(test_optimizer, test_loss, test_x, test_y, test_mask, test
       batchX = test_Set[0][index * batchSize:(index + 1) * batchSize]
       batchY = test_Set[1][index * batchSize:(index + 1) * batchSize]
       xf, yf, maskf, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
-      
-      _, crossEntropy = sess.run([test_optimizer, test_loss], feed_dict={test_x: xf, test_y: yf, test_seqLen: nVisitsOfEachPatient_List, test_mask: maskf, test_batch_size: len(nVisitsOfEachPatient_List)})
+
+      crossEntropy = sess.run(loss, feed_dict={x: xf, y: yf, seqLen: nVisitsOfEachPatient_List, mask: maskf, batch_size: len(nVisitsOfEachPatient_List)})
 
       #accumulation by simple summation taking the batch size into account
       crossEntropySum += crossEntropy * len(batchX)
@@ -94,53 +94,27 @@ def performEvaluation(test_optimizer, test_loss, test_x, test_y, test_mask, test
   return n_batches, crossEntropySum / dataCount
 
 def LSTMGoogle_layer(inputTensor, seqLen, batchSize):
-  layer = {"weights_lstm": tf.Variable(tf.random_normal([ARGS.hiddenDimSize[0], ARGS.numberOfInputCodes])),
-           "biases_lstm": tf.Variable(tf.random_normal([ARGS.numberOfInputCodes]))}
+  lstms = [tf.nn.rnn_cell.BasicLSTMCell(size) for size in ARGS.hiddenDimSize]
+  drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, output_keep_prob=ARGS.dropoutRate) for lstm in lstms]
+  cell = tf.nn.rnn_cell.MultiRNNCell(drops)
+  # initial_state = cell.zero_state(batchSize, dtype=tf.float32)
+  lstm_outputs, final_state = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+  return lstm_outputs[-1]
 
-  # def weight_variable(name, shape):
-  #     initial = tf.truncated_normal_initializer(stddev=0.01)
-  #     return tf.get_variable('W_' + name,
-  #                            dtype=tf.float32,
-  #                            shape=shape,
-  #                            initializer=initer)
+def FC_layer(inputTensor):
+  im_dim = inputTensor.get_shape()[1]
+  fc_layer = tf.get_variable(name='fully_connected',
+                           shape=[ARGS.hiddenDimSize[-1], ARGS.numberOfInputCodes],
+                           dtype=tf.float32,
+                           initializer=tf.keras.initializers.glorot_normal(),
+                           validate_shape=False)
 
-  # def bias_variable(name, shape):
-  #     initial = tf.constant(0., shape=shape, dtype=tf.float32)
-  #     return tf.get_variable('b_' + name,
-  #                            dtype=tf.float32,
-  #                            initializer=initial)
-
-  # W = weight_variable(name, shape=[in_dim, ARGS.numberOfInputCodes])
-  # b = bias_variable(name, [ARGS.numberOfInputCodes])
-
-  lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(ARGS.hiddenDimSize[0])
-  # init_state = lstm_cell.zero_state(batchSize, dtype=tf.float32)
-  # outputs, states = tf.nn.dynamic_rnn(lstm_cell, inputTensor, sequence_length=seqLen, time_major=True, initial_state=init_state, dtype=tf.float32)
-  outputs, states = tf.nn.dynamic_rnn(lstm_cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
-
-  output = tf.matmul(outputs[-1], layer["weights_lstm"]) + layer["biases_lstm"]
-  return output
-
-def FC_layer(inputTensor, name):
-  def weight_variable(name, shape):
-      initial = tf.truncated_normal_initializer(stddev=0.01)
-      return tf.get_variable('W_' + name,
-                             dtype=tf.float32,
-                             shape=shape,
-                             initializer=initial)
-
-  def bias_variable(name, shape):
-      initial = tf.constant(0., shape=shape, dtype=tf.float32)
-      return tf.get_variable('b_' + name,
-                             dtype=tf.float32,
-                             initializer=initial)
-
-  in_dim = inputTensor.get_shape()[1]
-  W = weight_variable(name, shape=[in_dim, ARGS.numberOfInputCodes])
-  b = bias_variable(name, [ARGS.numberOfInputCodes])
-  output = tf.matmul(inputTensor, W)
-  output += b
-  output = tf.nn.relu(output)
+  bias = tf.get_variable(name='bias',
+                       shape=[ARGS.numberOfInputCodes],
+                       dtype=tf.float32,
+                       initializer=tf.zeros_initializer(),
+                       validate_shape=False)
+  output = tf.nn.softmax(tf.nn.relu(tf.add(tf.matmul(inputTensor,fc_layer),bias)))
   return output
 
 
@@ -153,32 +127,26 @@ def build_model(model_name):
     batch_size = tf.placeholder(tf.int32, [], name='batch_size')
 
     flowingTensor = xf
+    flowingTensor = LSTMGoogle_layer(flowingTensor, nVisitsOfEachPatient_List, batch_size)
+    flowingTensor = FC_layer(flowingTensor)
+    flowingTensor = flowingTensor * maskf[:, :, None]
 
-    regularizer = tf.keras.regularizers.l2(ARGS.LregularizationAlpha)
-    lstm_predictions = LSTMGoogle_layer(flowingTensor, nVisitsOfEachPatient_List, batch_size)
-    dropout_predictions = tf.nn.dropout(lstm_predictions, rate=ARGS.dropoutRate)
-    predictions = FC_layer(dropout_predictions, "FC1")
-    masked_predictions = predictions * maskf[:, :, None]
-    
-    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=masked_predictions, labels=yf))
-    # loss = tf.math.reduce_mean(cross_entropy / nVisitsOfEachPatient_List)
-    # l2_loss = regularizer(loss)
-    
-    optimizer = tf.train.AdadeltaOptimizer().minimize(cross_entropy)
-    return optimizer, cross_entropy, xf, yf, maskf, nVisitsOfEachPatient_List, batch_size
+    epislon = 1e-8
+    cross_entropy = -(yf * tf.log(flowingTensor + epislon) + (1. - yf) * tf.log(1. - flowingTensor + epislon))
+    prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[0, 2]) / nVisitsOfEachPatient_List)
+    optimizer = tf.train.AdadeltaOptimizer(learning_rate=0.001, rho=0.95, epsilon=1e-06).minimize(prediction_loss)
+    return optimizer, prediction_loss, xf, yf, maskf, nVisitsOfEachPatient_List, batch_size
 
 def train_model():
   print("==> data loading")
   trainSet, testSet = load_data()
-  previousDimSize = ARGS.numberOfInputCodes
 
   print("==> model building")
-  optimizer, loss, x, y, mask, seqLen, batch_size = build_model("training")
+  optimizer, loss, x, y, mask, seqLen, batch_size = build_model("model")
 
   print ("==> training and validation")
   batchSize = ARGS.batchSize
   n_batches = int(np.ceil(float(len(trainSet[0])) / float(batchSize)))
-  test_optimizer, test_loss, test_x, test_y, test_mask, test_seqLen, test_batch_size = build_model("test")
 
   bestValidationCrossEntropy = 1e20
   bestValidationEpoch = 0
@@ -188,7 +156,7 @@ def train_model():
   iConsecutiveNonImprovements = 0
   epoch_counter = 0
 
-  init = (tf.global_variables_initializer(), tf.local_variables_initializer())
+  init = (tf.global_variables_initializer())
   saver = tf.train.Saver(save_relative_paths=True)
   with tf.Session() as sess:
     sess.run(init)
@@ -202,12 +170,13 @@ def train_model():
         xf, yf, maskf, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
         xf += np.random.normal(0, 0.1, xf.shape)
 
-        _, trainCrossEntropy = sess.run([optimizer, loss], feed_dict={x: xf, y: yf, seqLen: nVisitsOfEachPatient_List, mask: maskf, batch_size:len(nVisitsOfEachPatient_List), batch_size:len(nVisitsOfEachPatient_List)})
+        trainCrossEntropy = sess.run(loss, feed_dict={x: xf, y: yf, seqLen: nVisitsOfEachPatient_List, mask: maskf, batch_size:len(nVisitsOfEachPatient_List)})
         trainCrossEntropyVector.append(trainCrossEntropy)
+        _ = sess.run(optimizer, feed_dict={x: xf, y: yf, seqLen: nVisitsOfEachPatient_List, mask: maskf, batch_size:len(nVisitsOfEachPatient_List)})
         iteration += 1
 
       print('-> Epoch: %d, mean cross entropy considering %d TRAINING batches: %f' % (epoch_counter, n_batches, np.mean(trainCrossEntropyVector)))
-      nValidBatches, validationCrossEntropy = performEvaluation(test_optimizer, test_loss, test_x, test_y, test_mask, test_seqLen, testSet, test_batch_size)
+      nValidBatches, validationCrossEntropy = performEvaluation(loss, x, y, mask, seqLen, batch_size, testSet)
       print('      mean cross entropy considering %d VALIDATION batches: %f' % (nValidBatches, validationCrossEntropy))
       if validationCrossEntropy < bestValidationCrossEntropy:
         iImprovementEpochs += 1
