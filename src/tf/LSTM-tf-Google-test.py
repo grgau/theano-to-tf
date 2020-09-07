@@ -25,54 +25,18 @@ def prepareHotVectors(test_tensor):
   return x_hotvectors_tensorf, mask, n_visits_of_each_patientList
 
 def loadModel():
-  model_to_use = 'tensorflow-model.9'
-  export_dir = os.path.join('compiled_models', model_to_use)
+  model_path = ARGS.modelPath
 
   loaded_graph = tf.Graph()
   with tf.Session(graph=loaded_graph).as_default() as sess:
-    tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], export_dir)
+    tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], model_path)
     x = loaded_graph.get_tensor_by_name('inputs:0')
-    predictions = loaded_graph.get_tensor_by_name('labels:0')
+    predictions = loaded_graph.get_tensor_by_name('predictions:0')
     mask = loaded_graph.get_tensor_by_name('mask:0')
     seqLen = loaded_graph.get_tensor_by_name('nVisitsOfEachPatient_List:0')
-    return loaded_graph, predictions, x, mask, seqLen
 
-
-#   with tf.Session() as sess:
-#     graph = tf.train.import_meta_graph(ARGS.modelPath + ".meta")
-#     graph.restore(sess, tf.train.latest_checkpoint("compiled_models"))
-#     graph = tf.get_default_graph()
-#     xf = graph.get_tensor_by_name("inputs:0")
-#     maskf = graph.get_tensor_by_name("mask:0")
-#     nVisitsOfEachPatient_List = graph.get_tensor_by_name("nVisitsOfEachPatient_List:0")
-#     ARGS.numberOfInputCodes = xf.shape[-1]
-#     return xf, maskf, nVisitsOfEachPatient_List
-
-# def LSTMGoogle_layer(inputTensor, maskf, seqLen):
-#   lstms = [tf.nn.rnn_cell.BasicLSTMCell(size) for size in ARGS.hiddenDimSize]
-#   cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
-#   lstm_outputs, final_state = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
-#   return lstm_outputs[-1]
-
-# def FC_layer(inputTensor):
-#   fc_layer = tf.get_variable(name='fully_connected',
-#                            shape=[ARGS.hiddenDimSize[-1], ARGS.numberOfInputCodes],
-#                            dtype=tf.float32,
-#                            initializer=tf.keras.initializers.glorot_normal())
-
-#   bias = tf.get_variable(name='bias',
-#                        shape=[ARGS.numberOfInputCodes],
-#                        dtype=tf.float32,
-#                        initializer=tf.zeros_initializer())
-#   output = tf.nn.softmax(tf.nn.relu(tf.add(tf.matmul(inputTensor,fc_layer),bias)))
-#   return output
-
-# def build_model(xf, maskf, seqLen):
-#   flowingTensor = xf
-#   flowingTensor = LSTMGoogle_layer(flowingTensor, maskf, seqLen)
-#   flowingTensor = FC_layer(flowingTensor)
-#   flowingTensor = flowingTensor * maskf[:, :, None]
-#   return flowingTensor, xf, maskf, seqLen
+    ARGS.numberOfInputCodes = x.get_shape()[-1]
+    return sess, predictions, x, mask, seqLen
 
 
 def load_data():
@@ -91,7 +55,7 @@ def load_data():
 
 def testModel():
   print('==> model loading')
-  loaded_graph, predictions, x, mask, seqLen = loadModel()
+  session, predictions, x, mask, seqLen = loadModel()
 
   print('==> data loading')
   testSet = load_data()
@@ -101,7 +65,7 @@ def testModel():
   predictedY_list = []
   actualY_list = []
 
-  with tf.Session(graph=loaded_graph) as sess:
+  with session as sess:
     for batchIndex in range(nBatches):
       batchX = testSet[0][batchIndex * ARGS.batchSize: (batchIndex + 1) * ARGS.batchSize]
       batchY = testSet[1][batchIndex * ARGS.batchSize: (batchIndex + 1) * ARGS.batchSize]
@@ -134,10 +98,11 @@ def testModel():
   for ithK, k in enumerate(k_list):
     finalRecalls.append(recall_sum[ithK] / float(len(predictedY_list)))
 
-  print('Results for Precision@10, Precision@20, and Precision@30')
+  print('Results for Recall@10, Recall@20, and Recall@30')
   print(str(finalRecalls[0]))
   print(str(finalRecalls[1]))
   print(str(finalRecalls[2]))
+  sess.close()
 
 
 def parse_arguments():

@@ -1,4 +1,0 @@
-Results for Precision@10, Precision@20, and Precision@30
-0.394611673472
-0.553426192823
-0.647259616855

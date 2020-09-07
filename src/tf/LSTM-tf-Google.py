@@ -43,23 +43,6 @@ def prepareHotVectors(train_tensor, labels_tensor):
   return x_hotvectors_tensorf, y_hotvectors_tensor, mask, nVisitsOfEachPatient_List
 
 
-def prepareHotVectors_test(test_tensor):
-  n_visits_of_each_patientList = np.array([len(seq) for seq in test_tensor]) - 1
-  number_of_patients = len(test_tensor)
-  max_number_of_visits = np.max(n_visits_of_each_patientList)
-
-  x_hotvectors_tensorf = np.zeros((max_number_of_visits, number_of_patients, ARGS.numberOfInputCodes)).astype(np.float64)
-  mask = np.zeros((max_number_of_visits, number_of_patients)).astype(np.float64)
-
-  for idx, (train_patient_matrix) in enumerate(test_tensor):
-    for i_th_visit, visit_line in enumerate(train_patient_matrix[:-1]): #ignores the last visit, which is not part of the computation
-      for code in visit_line:
-        x_hotvectors_tensorf[i_th_visit, idx, code] = 1
-    mask[:n_visits_of_each_patientList[idx], idx] = 1.
-
-  return x_hotvectors_tensorf, mask, n_visits_of_each_patientList
-
-
 def load_data():
   main_trainSet = pickle.load(open(ARGS.inputFileRadical+'.train', 'rb'))
   print("-> " + str(len(main_trainSet)) + " patients at dimension 0 for file: "+ ARGS.inputFileRadical + ".train dimensions ")
@@ -109,20 +92,16 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
       #At the end, it returns the mean cross entropy considering all the batches
   return n_batches, crossEntropySum / dataCount
 
-def LSTMGoogle_layer(inputTensor, maskf, seqLen):
-  # mask = tf.cast(maskf, dtype=tf.bool)
-  # input_masked = tf.boolean_mask(inputTensor, mask)
-  # print(inputTensor.shape)
-  # print(mask.shape)
-  # print(input_masked.shape)
-  lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=False) for size in ARGS.hiddenDimSize]
-  drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, output_keep_prob=ARGS.dropoutRate) for lstm in lstms]
+def LSTMGoogle_layer(inputTensor, seqLen):
+  # lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=False) for size in ARGS.hiddenDimSize]
+  lstms = [tf.nn.rnn_cell.LSTMCell(size, use_peepholes=True, num_proj=size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
+  drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
   cell = tf.nn.rnn_cell.MultiRNNCell(drops)
   lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
-  return lstm_states[-1]
+  return lstm_states[-1].c #lstm_states has shape (c, h) where c are the cell states and h the hidden states
 
 def FC_layer(inputTensor):
-  im_dim = inputTensor.get_shape()[1]
+  im_dim = inputTensor.get_shape()[-1]
   weights = tf.get_variable(name='weights',
                            shape=[im_dim, ARGS.numberOfInputCodes],
                            dtype=tf.float32,
@@ -144,10 +123,9 @@ def build_model():
     maskf = tf.placeholder(tf.float32, [None, None], name="mask")
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
 
-    flowingTensor = xf
-    flowingTensor = LSTMGoogle_layer(flowingTensor, maskf, seqLen)
+    flowingTensor = LSTMGoogle_layer(xf, seqLen)
     flowingTensor, weights = FC_layer(flowingTensor)
-    flowingTensor = flowingTensor * maskf[:,:,None]
+    flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
 
     epislon = 1e-8
     cross_entropy = -(yf * tf.log(flowingTensor + epislon) + (1. - yf) * tf.log(1. - flowingTensor + epislon))
@@ -176,7 +154,7 @@ def train_model():
   iConsecutiveNonImprovements = 0
   epoch_counter = 0
 
-  with tf.Session(graph=graph).as_default() as sess:
+  with tf.Session(graph=graph) as sess:
     sess.run(init)
 
     for epoch_counter in range(ARGS.nEpochs):
@@ -205,92 +183,32 @@ def train_model():
         bestValidationEpoch = epoch_counter
 
         if os.path.exists(bestModelDirName):
-          print(bestModelDirName)
           shutil.rmtree(bestModelDirName)
-        
+        bestModelDirName = ARGS.outFile + '.' + str(epoch_counter)
+
+        if os.path.exists(bestModelDirName):
+          shutil.rmtree(bestModelDirName)
+
+        signature = tf.saved_model.signature_def_utils.predict_signature_def(inputs= {"inputs": x, "mask": mask, "seqLen": seqLen}, outputs= {"predictions": predictions})
         builder = tf.saved_model.builder.SavedModelBuilder(bestModelDirName)
-        builder.add_meta_graph_and_variables(sess, [tf.saved_model.tag_constants.SERVING],
-                                             signature_def_map={'model': tf.saved_model.signature_def_utils.predict_signature_def(
-                                             inputs= {"x": x, "y": y, "mask": mask, "seqLen": seqLen},
-                                             outputs= {"loss": loss})})
+        builder.add_meta_graph_and_variables(sess, [tf.saved_model.tag_constants.SERVING], signature_def_map={'model': signature})
         builder.save()
 
-        bestModelDirName = ARGS.outFile + '.' + str(epoch_counter)
       else:
         print('Epoch ended without improvement.')
         iConsecutiveNonImprovements += 1
       if iConsecutiveNonImprovements > ARGS.maxConsecutiveNonImprovements: #default is 10
         break
 
-    print("Testing....")
-    testSet = load_test_data()
-
-    print('==> model execution')
-    nBatches = int(np.ceil(float(len(testSet[0])) / float(ARGS.batchSize)))
-    predictedY_list = []
-    actualY_list = []
-
-    for batchIndex in range(nBatches):
-      batchX = testSet[0][batchIndex * ARGS.batchSize: (batchIndex + 1) * ARGS.batchSize]
-      batchY = testSet[1][batchIndex * ARGS.batchSize: (batchIndex + 1) * ARGS.batchSize]
-      xf, maskf, nVisitsOfEachPatient_List = prepareHotVectors_test(batchX)
-
-      predicted_y = sess.run(predictions, feed_dict={x: xf, mask: maskf, seqLen: nVisitsOfEachPatient_List})
-
-      for ith_patient in range(predicted_y.shape[1]):
-        predictedPatientSlice = predicted_y[:, ith_patient, :]
-        actual_y = batchY[ith_patient][1:]
-        for ith_admission in range(nVisitsOfEachPatient_List[ith_patient]):
-          actualY_list.append(actual_y[ith_admission])
-
-          ithPrediction = predictedPatientSlice[ith_admission]
-          enumeratedPrediction = [temp for temp in enumerate(ithPrediction)]
-          sortedPrediction_30Top = sorted(enumeratedPrediction, key=lambda x: x[1],reverse=True)[0:30]
-          sortedPrediction_30Top_indexes = [temp[0] for temp in sortedPrediction_30Top]
-          predictedY_list.append(sortedPrediction_30Top_indexes)
-
-  print('==> computation of prediction results')
-  recall_sum = [0.0,0.0,0.0]
-  k_list = [10,20,30]
-  for ith_admission in range(len(predictedY_list)):
-    ithActualY = set(actualY_list[ith_admission])
-    for ithK, k in enumerate(k_list):
-      ithPredictedY = set(predictedY_list[ith_admission][:k])
-      intersection_set = ithActualY.intersection(ithPredictedY)
-      recall_sum[ithK] += len(intersection_set) / float(len(ithActualY))
-  finalRecalls = []
-  for ithK, k in enumerate(k_list):
-    finalRecalls.append(recall_sum[ithK] / float(len(predictedY_list)))
-
-  print('Results for Precision@10, Precision@20, and Precision@30')
-  print(str(finalRecalls[0]))
-  print(str(finalRecalls[1]))
-  print(str(finalRecalls[2]))
-
-
-  print('--------------SUMMARY--------------')
-  print('The best VALIDATION cross entropy occurred at epoch %d, the value was of %f ' % (bestValidationEpoch, bestValidationCrossEntropy))
-  print('Best model file: ' + bestModelDirName)
-  print('Number of improvement epochs: ' + str(iImprovementEpochs) + ' out of ' + str(epoch_counter+1) + ' possible improvements.')
-  print('Note: the smaller the cross entropy, the better.')
-  print('-----------------------------------')
-  sess.close()
-
-
-
-def load_test_data():
-  testSet_x = np.array(pickle.load(open(ARGS.inputFileRadical+'.test', 'rb')))
-  testSet_y = np.array(pickle.load(open(ARGS.inputFileRadical+'.test', 'rb')))
-
-  def len_argsort(seq):
-    return sorted(range(len(seq)), key=lambda x: len(seq[x]))
-
-  sorted_index = len_argsort(testSet_x)
-  testSet_x = [testSet_x[i] for i in sorted_index]
-  testSet_y = [testSet_y[i] for i in sorted_index]
-
-  testSet = [testSet_x, testSet_y]
-  return testSet
+    # Best results
+    print('--------------SUMMARY--------------')
+    print('The best VALIDATION cross entropy occurred at epoch %d, the value was of %f ' % (
+    bestValidationEpoch, bestValidationCrossEntropy))
+    print('Best model file: ' + bestModelDirName)
+    print('Number of improvement epochs: ' + str(iImprovementEpochs) + ' out of ' + str(epoch_counter + 1) + ' possible improvements.')
+    print('Note: the smaller the cross entropy, the better.')
+    print('-----------------------------------')
+    sess.close()
 
 
 def parse_arguments():
