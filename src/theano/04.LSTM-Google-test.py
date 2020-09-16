@@ -4,18 +4,51 @@
 #################################################################################################
 import cPickle as pickle
 from collections import OrderedDict
+from itertools import count
 import argparse
 import theano
 import theano.tensor as T
 from theano import config
 import numpy as np
+import csv
 
 global ARGS
 global tPARAMS
 
+from decimal import Decimal, getcontext
+getcontext().Emax = 100000000000000000000
+
+def strenght(inter, adm_i, adm_j):
+	inter = Decimal(0.0000001) if inter == 0 else Decimal(inter)
+	return Decimal(len(list(set(adm_i).intersection(adm_j)))) ** (100/inter)
+
+def generate_strenghts(dataset, interval):
+	normalized_strs = []
+	for t, inter in zip(dataset, interval):
+		for i in range(1, len(t)):
+			normalized_strs.append(strenght(inter[i], t[i-1], t[i]))
+	min_str, max_str = min(normalized_strs), max(normalized_strs)
+	for i, val in enumerate(normalized_strs):
+		normalized_strs[i] = (val-min_str) / (max_str-min_str)
+	return normalized_strs
+
+def split_by_strenght(dataset, interval, threshold):
+	strenghts = generate_strenghts(dataset, interval)
+	new_dataset = []
+	for t, inter in zip(dataset, interval):
+		split_count = 0
+		arrays = [[t[0]]]
+		for i in range(1, len(t)):
+			if len(arrays[split_count]) > 1 and len(t)-1 > i and strenghts[i] < threshold: #len(t)-1 is for checking if last element in array, to not split
+				arrays.append([t[i]])
+				split_count += 1
+			else:
+				arrays[len(arrays) - 1].append(t[i])
+		new_dataset.extend(arrays)
+	return new_dataset
+
 def numpy_floatX(data):
 	return np.asarray(data, dtype=config.floatX)
-
 
 def prepareHotVectors(test_tensor):
 	n_visits_of_each_patientList = np.array([len(seq) for seq in test_tensor]) - 1
@@ -99,6 +132,7 @@ def build_model():
 def load_data():
 	testSet_x = np.array(pickle.load(open(ARGS.inputFileRadical+'.test', 'rb')))
 	testSet_y = np.array(pickle.load(open(ARGS.inputFileRadical+'.test', 'rb')))
+	testIntervalSet = np.array(pickle.load(open(ARGS.inputFileRadical+'.INTERVAL.test', 'rb')))
 
 	def len_argsort(seq):
 		return sorted(range(len(seq)), key=lambda x: len(seq[x]))
@@ -106,18 +140,28 @@ def load_data():
 	sorted_index = len_argsort(testSet_x)
 	testSet_x = [testSet_x[i] for i in sorted_index]
 	testSet_y = [testSet_y[i] for i in sorted_index]
+	testIntervalSet = [testIntervalSet[i] for i in sorted_index]
 
 	testSet = [testSet_x, testSet_y]
-	return testSet
+	return testSet, testIntervalSet
+
+def load_patients():
+	return np.array(pickle.load(open(ARGS.inputFileRadical+'.map.test', 'rb')))
 
 
 def testModel():
+	threshold = ARGS.strengthThreshold
+	print("-> Threshold value: " + str(threshold))
+
 	print '==> model loading'
 	global tPARAMS
 	tPARAMS = loadModel()
 
 	print '==> data loading'
-	testSet = load_data()
+	testSet, testIntervalSet = load_data()
+
+	print '==> load patients'
+	# patientsSet = load_patients()
 
 	print '==> model rebuilding'
 	xf, mask, MODEL = build_model()
@@ -127,11 +171,20 @@ def testModel():
 	nBatches = int(np.ceil(float(len(testSet[0])) / float(ARGS.batchSize)))
 	predictedY_list = []
 	actualY_list = []
+	predicted_yList = []
 	for batchIndex in range(nBatches):
 		batchX = testSet[0][batchIndex * ARGS.batchSize: (batchIndex + 1) * ARGS.batchSize]
 		batchY = testSet[1][batchIndex * ARGS.batchSize: (batchIndex + 1) * ARGS.batchSize]
+		batchInterval = testIntervalSet[batchIndex * ARGS.batchSize: (batchIndex + 1) * ARGS.batchSize]
 		xf, mask, nVisitsOfEachPatient_List = prepareHotVectors(batchX)
 		predicted_y = PREDICTOR_COMPILED(xf, mask)
+		predicted_yList.append(predicted_y.tolist()[-1])
+
+		# Append to testSet new trajectories splitted by strenght
+		# splittedTestSet_0 = split_by_strenght(batchX, batchInterval, threshold)
+		# splittedTestSet_1 = split_by_strenght(batchY, batchInterval, threshold)
+		# testSet[0].extend(splittedTestSet_0)
+		# testSet[1].extend(splittedTestSet_1)
 
 		for ith_patient in range(predicted_y.shape[1]):
 			predictedPatientSlice = predicted_y[:, ith_patient, :]
@@ -146,6 +199,8 @@ def testModel():
 				predictedY_list.append(sortedPrediction_30Top_indexes)
 
 	print '==> computation of prediction results'
+	print actualY_list
+	print predictedY_list
 	recall_sum = [0.0,0.0,0.0]
 	k_list = [10,20,30]
 	for ith_admission in range(len(predictedY_list)):
@@ -162,6 +217,13 @@ def testModel():
 	print str(finalRecalls[0])
 	print	str(finalRecalls[1])
 	print str(finalRecalls[2])
+	# return predicted_y.reshape(-1, predicted_y.shape[-1]).tolist() # esse nao
+	# return patientsSet, predicted_yList # esse sim
+	return predicted_yList
+
+	# Pegue n-1 e sai 1
+	# Considerar somente ultima predicao pra clusterizacao -1 acho
+	# Matriz cada coluna eh probabilidade de diagnostico, e cada linha paciente (considerando ultima predicao)
 
 
 def parse_arguments():
@@ -170,6 +232,7 @@ def parse_arguments():
 	parser.add_argument('modelFile', type=str, metavar='<model_file>', help='The path to the model file .npz')
 	parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
 	parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
+	parser.add_argument('--strengthThreshold', type=float, default=0, help='Threshold to split patient visits')
 	ARGStemp = parser.parse_args()
 	hiddenDimSize = [int(strDim) for strDim in ARGStemp.hiddenDimSize[1:-1].split(',')]
 	ARGStemp.hiddenDimSize = hiddenDimSize
@@ -181,5 +244,10 @@ if __name__ == '__main__':
 	tPARAMS = OrderedDict()
 	global ARGS
 	ARGS = parse_arguments()
+	# patients, predictions = testModel()
+	predictions = testModel()
 
-	testModel()
+	# with open("output.csv", "wb") as f:
+		# writer = csv.writer(f)
+		# for idx, batch in zip(count(step=ARGS.batchSize), predictions):
+		# 	writer.writerows(np.column_stack((patients[idx:idx+len(batch)], np.array(batch))).tolist())

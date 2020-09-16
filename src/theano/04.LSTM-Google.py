@@ -13,9 +13,64 @@ import theano.tensor as T
 from theano import config
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import numpy as np
+from collections import Counter
 
 global ARGS
 global tPARAMS
+
+from decimal import Decimal, getcontext
+getcontext().Emax = 100000000000000000000
+
+def strenght(inter, adm_i, adm_j):
+	# inter = Decimal(0.0000001) if inter == 0 else Decimal(inter)
+	# return Decimal(len(list(set(adm_i).intersection(adm_j)))) ** (100/inter)
+	return float(len(list(set(adm_i).intersection(adm_j))))/float((np.log(inter)+1)*0.005)
+	# return 0 if inter == 0 else float(len(list(set(adm_i).intersection(adm_j))))/float(inter)
+
+def generate_strenghts(dataset, interval):
+	normalized_strs = []
+	for t, inter in zip(dataset, interval):
+		for i in range(1, len(t)):
+			normalized_strs.append(strenght(inter[i], t[i-1], t[i]))
+
+	x = np.asarray(normalized_strs)
+	normalized_strs =  (x - x.min()) / (np.ptp(x))
+	return normalized_strs
+
+# def remove_array_len_1(list_value):
+# 	for i in reversed(range(len(list_value))):
+# 		if len(list_value[i]) == 1:
+# 			del list_value[i]
+# 	return list_value
+
+def split_by_strenght(dataset, interval, threshold):
+	strenghts = generate_strenghts(dataset, interval)
+	new_dataset = []
+	for t, inter in zip(dataset, interval):
+		split_count = 0
+		arrays = [[t[0]]]
+		for i in range(1, len(t)):
+			if len(arrays[split_count]) > 1 and len(t)-1 > i and strenghts[i] < threshold: #len(t)-1 is for checking if last element in array, to not split
+				arrays.append([t[i]])
+				split_count += 1
+			else:
+				arrays[len(arrays) - 1].append(t[i])
+		new_dataset.extend(arrays)
+	return new_dataset
+
+
+# def split_by_strenght(dataset, interval, threshold):
+# 	strenghts = generate_strenghts(dataset, interval)
+# 	new_dataset = []
+# 	for t, inter in zip(dataset, interval):
+# 		arrays = [[t[0]]]
+# 		for i in range(1, len(t)):
+# 			if strenghts[i] < threshold: #len(t)-1 is for checking if last element in array, to not split
+# 				arrays.append([t[i]])
+# 			else:
+# 				arrays[len(arrays) - 1].append(t[i])
+# 		new_dataset.extend(arrays)
+# 	return new_dataset
 
 def unzip(zipped):
 	new_params = OrderedDict()
@@ -185,11 +240,15 @@ def addAdadeltaGradientDescent(grads, xf, y, mask, nVisitsOfEachPatient_List, MO
 
 
 def load_data():
+	threshold = ARGS.strengthThreshold
+	print("-> Threshold value: " + str(threshold))
 	main_trainSet = pickle.load(open(ARGS.inputFileRadical+'.train', 'rb'))
 	print("-> " + str(len(main_trainSet)) + " patients at dimension 0 for file: "+ ARGS.inputFileRadical + ".train dimensions ")
 	main_testSet = pickle.load(open(ARGS.inputFileRadical+'.test', 'rb'))
 	print("-> " + str(len(main_testSet)) + " patients at dimension 0 for file: "+ ARGS.inputFileRadical + ".test dimensions ")
 	print("Note: these files carry 3D tensor data; the above numbers refer to dimension 0, dimensions 1 and 2 have irregular sizes.")
+	main_trainIntervalSet = pickle.load(open(ARGS.inputFileRadical+'.INTERVAL.train', 'rb'))
+	main_testIntervalSet = pickle.load(open(ARGS.inputFileRadical+'.INTERVAL.test', 'rb'))
 
 	ARGS.numberOfInputCodes = getNumberOfCodes([main_trainSet,main_testSet])
 	print 'Number of diagnosis input codes: ' + str(ARGS.numberOfInputCodes)
@@ -197,6 +256,16 @@ def load_data():
 	#uses the same data for testing, but disregarding the fist admission of each patient
 	labels_trainSet = pickle.load(open(ARGS.inputFileRadical+'.train', 'rb'))
 	labels_testSet = pickle.load(open(ARGS.inputFileRadical+'.test', 'rb'))
+
+	# main_trainSet = split_by_strenght(main_trainSet, main_trainIntervalSet, threshold)
+	# labels_trainSet = split_by_strenght(labels_trainSet, main_trainIntervalSet, threshold)
+	# main_testSet = split_by_strenght(main_testSet, main_testIntervalSet, threshold)
+	# labels_testSet = split_by_strenght(labels_testSet, main_testIntervalSet, threshold)
+
+	# main_trainSet = remove_array_len_1(main_trainSet)
+	# labels_trainSet = remove_array_len_1(labels_trainSet)
+	# main_testSet = remove_array_len_1(main_testSet)
+	# labels_testSet = remove_array_len_1(labels_testSet)
 
 	train_sorted_index = sorted(range(len(main_trainSet)), key=lambda x: len(main_trainSet[x]))  #lambda x: len(seq[x]) --> f(x) return len(seq[x])
 	main_trainSet = [main_trainSet[i] for i in train_sorted_index]
@@ -310,6 +379,7 @@ def parse_arguments():
 	parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
 	parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
 	parser.add_argument('--dropoutRate', type=float, default=0.45, help='Dropout probability.')
+	parser.add_argument('--strengthThreshold', type=float, default=0, help='Threshold to split patient visits')
 
 	ARGStemp = parser.parse_args()
 	hiddenDimSize = [int(strDim) for strDim in ARGStemp.hiddenDimSize[1:-1].split(',')]
