@@ -4,6 +4,8 @@ import shutil
 import os
 import random
 
+from dt_rnn_cell import DT_RNNCell
+
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 import numpy as np
@@ -92,13 +94,12 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
       #At the end, it returns the mean cross entropy considering all the batches
   return n_batches, crossEntropySum / dataCount
 
-def LSTMGoogle_layer(inputTensor, seqLen):
-  # lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=False) for size in ARGS.hiddenDimSize]
-  lstms = [tf.nn.rnn_cell.LSTMCell(size, use_peepholes=True, num_proj=size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-  drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
-  cell = tf.nn.rnn_cell.MultiRNNCell(drops)
-  lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
-  return lstm_states[-1].c #lstm_states has shape (c, h) where c are the cell states and h the hidden states
+def DTRNN_layer(inputTensor, seqLen):
+  rnns = [DT_RNNCell(size) for size in [[271, 271]]]
+  # drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate, seed=13713) for lstm in rnns]
+  cell = tf.nn.rnn_cell.MultiRNNCell(rnns, state_is_tuple=True)
+  rnn_outputs, _ = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+  return rnn_outputs
 
 def FC_layer(inputTensor):
   im_dim = inputTensor.get_shape()[-1]
@@ -123,7 +124,7 @@ def build_model():
     maskf = tf.placeholder(tf.float32, [None, None], name="mask")
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
 
-    flowingTensor = LSTMGoogle_layer(xf, seqLen)
+    flowingTensor = DTRNN_layer(xf, seqLen)
     flowingTensor, weights = FC_layer(flowingTensor)
     flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
 

@@ -18,59 +18,40 @@ from collections import Counter
 global ARGS
 global tPARAMS
 
-from decimal import Decimal, getcontext
-getcontext().Emax = 100000000000000000000
-
 def strenght(inter, adm_i, adm_j):
-	# inter = Decimal(0.0000001) if inter == 0 else Decimal(inter)
-	# return Decimal(len(list(set(adm_i).intersection(adm_j)))) ** (100/inter)
-	return float(len(list(set(adm_i).intersection(adm_j))))/float((np.log(inter)+1)*0.005)
-	# return 0 if inter == 0 else float(len(list(set(adm_i).intersection(adm_j))))/float(inter)
+  intersect = len(list(set(adm_i).intersection(adm_j)))
+  intersect_norm = np.float64(intersect) / np.float64(min(len(adm_i), len(adm_j)))
+  # return intersect_norm if inter == 0 else intersect / ((np.log(inter) + 1) ** intersect_norm)
+  return intersect_norm if inter == 0 else intersect / ((np.log(inter) + 1) ** (1/5*intersect_norm))
 
 def generate_strenghts(dataset, interval):
 	normalized_strs = []
+
 	for t, inter in zip(dataset, interval):
 		for i in range(1, len(t)):
 			normalized_strs.append(strenght(inter[i], t[i-1], t[i]))
 
-	x = np.asarray(normalized_strs)
-	normalized_strs =  (x - x.min()) / (np.ptp(x))
+	min_str, max_str = min(normalized_strs), max(normalized_strs)
+	for i, val in enumerate(normalized_strs):
+		normalized_strs[i] = 0 if (max_str-min_str) == 0 else (val-min_str) / (max_str-min_str)
 	return normalized_strs
 
-# def remove_array_len_1(list_value):
-# 	for i in reversed(range(len(list_value))):
-# 		if len(list_value[i]) == 1:
-# 			del list_value[i]
-# 	return list_value
-
 def split_by_strenght(dataset, interval, threshold):
+	str_counter = 0
 	strenghts = generate_strenghts(dataset, interval)
 	new_dataset = []
 	for t, inter in zip(dataset, interval):
 		split_count = 0
 		arrays = [[t[0]]]
 		for i in range(1, len(t)):
-			if len(arrays[split_count]) > 1 and len(t)-1 > i and strenghts[i] < threshold: #len(t)-1 is for checking if last element in array, to not split
+			if len(arrays[split_count]) > 1 and len(t)-1 > i and strenghts[str_counter] < threshold: #len(t)-1 is for checking if last element in array, to not split
 				arrays.append([t[i]])
 				split_count += 1
 			else:
 				arrays[len(arrays) - 1].append(t[i])
+			str_counter += 1
 		new_dataset.extend(arrays)
 	return new_dataset
-
-
-# def split_by_strenght(dataset, interval, threshold):
-# 	strenghts = generate_strenghts(dataset, interval)
-# 	new_dataset = []
-# 	for t, inter in zip(dataset, interval):
-# 		arrays = [[t[0]]]
-# 		for i in range(1, len(t)):
-# 			if strenghts[i] < threshold: #len(t)-1 is for checking if last element in array, to not split
-# 				arrays.append([t[i]])
-# 			else:
-# 				arrays[len(arrays) - 1].append(t[i])
-# 		new_dataset.extend(arrays)
-# 	return new_dataset
 
 def unzip(zipped):
 	new_params = OrderedDict()
@@ -131,7 +112,7 @@ def init_params_LSTMGoogle(previousDimSize):
 
 		tPARAMS['W_o'  + str(count)] = theano.shared(np.random.normal(0., xavier_variance, (previousDimSize, hiddenDimSize)).astype(config.floatX),'W_o'  + str(count))
 		tPARAMS['U_o' + str(count)] = theano.shared(np.identity(hiddenDimSize).astype(config.floatX), 'U_o' + str(count))
-		tPARAMS['U_co' + str(count)] = theano.shared(np.identity(hiddenDimSize).astype(config.floatX),'U_co'  + str(count))
+		# tPARAMS['U_co' + str(count)] = theano.shared(np.identity(hiddenDimSize).astype(config.floatX),'U_co'  + str(count))
 		tPARAMS['b_o'  + str(count)] = theano.shared(np.zeros(hiddenDimSize).astype(config.floatX),'b_o'  + str(count))
 
 		tPARAMS['W_c'  + str(count)] = theano.shared(np.random.normal(0., xavier_variance, (previousDimSize, hiddenDimSize)).astype(config.floatX),'W_c'  + str(count))
@@ -139,7 +120,7 @@ def init_params_LSTMGoogle(previousDimSize):
 		tPARAMS['b_c'  + str(count)] = theano.shared(np.zeros(hiddenDimSize).astype(config.floatX),'b_c'  + str(count))
 		previousDimSize = hiddenDimSize
 
-		tPARAMS['W_p'  + str(count)] = theano.shared(np.random.normal(0., xavier_variance, (previousDimSize, hiddenDimSize)).astype(config.floatX),'W_c'  + str(count))
+		tPARAMS['W_p'  + str(count)] = theano.shared(np.random.normal(0., xavier_variance, (previousDimSize, hiddenDimSize)).astype(config.floatX),'W_p'  + str(count))
 	return previousDimSize
 
 def LSTMGoogle_layer(inputTensor, layerIndex, hiddenDimSize, mask=None):
@@ -153,15 +134,16 @@ def LSTMGoogle_layer(inputTensor, layerIndex, hiddenDimSize, mask=None):
 	V_hx = T.dot(inputTensor,tPARAMS['V_h' + layerIndex])
 
 	def stepFn(stepMask, w_ix, w_fx, w_ox, w_cx, v_hx, h_previous, state_previous):  # .* -> element-wise multiplication; * -> matrix multiplication
-		input_gate = T.nnet.sigmoid(w_ix + T.dot(h_previous,tPARAMS['U_i' + layerIndex]) + T.dot(state_previous,tPARAMS['V_i' + layerIndex] + tPARAMS['b_i' + layerIndex]))
-		forget_gate = T.nnet.sigmoid(w_fx + T.dot(h_previous,tPARAMS['U_f' + layerIndex]) + T.dot(state_previous,tPARAMS['V_f' + layerIndex] + tPARAMS['b_f' + layerIndex]))
+		input_gate = T.nnet.sigmoid(w_ix + T.dot(h_previous,tPARAMS['U_i' + layerIndex]) + T.dot(state_previous,tPARAMS['V_i' + layerIndex]) + tPARAMS['b_i' + layerIndex])
+		forget_gate = T.nnet.sigmoid(w_fx + T.dot(h_previous,tPARAMS['U_f' + layerIndex]) + T.dot(state_previous,tPARAMS['V_f' + layerIndex]) + tPARAMS['b_f' + layerIndex])
+		output_gate = T.nnet.sigmoid(w_ox + T.dot(h_previous,tPARAMS['U_o' + layerIndex]) + tPARAMS['b_o' + layerIndex])
 		state_new = forget_gate*state_previous + input_gate * T.tanh(w_cx + T.dot(h_previous,tPARAMS['U_c' + layerIndex]) + tPARAMS['b_c' + layerIndex])
 		state_new = stepMask[:, None]*state_new + (1. - stepMask)[:, None]*state_previous
-		output_gate = T.nnet.sigmoid(w_ox + T.dot(h_previous,tPARAMS['U_o' + layerIndex]) + T.dot(state_new,tPARAMS['U_co' + layerIndex]) + tPARAMS['b_o' + layerIndex])
 		r = T.tanh(state_new)
 		m = T.dot(r,tPARAMS['W_p' + layerIndex])
 		h_new = output_gate*(m + v_hx)
-		h_new = stepMask[:, None] * h_new + (1. - stepMask)[:, None] * h_previous  # h_new=mask*h_new + (1-mask)*h_previous
+		# h_new = output_gate*T.tanh(state_new)
+		h_new = stepMask[:, None] * h_new + (1. - stepMask)[:, None] * h_previous  #h_new = mask * h_new + (1 - mask) * h_previous
 		return h_new, state_new
 
 	results, _ = theano.scan(fn=stepFn,
@@ -170,11 +152,12 @@ def LSTMGoogle_layer(inputTensor, layerIndex, hiddenDimSize, mask=None):
 			   name='LSTMGoogle_layer' + layerIndex,
 			   n_steps=maxNumberOfVisits)
 
-	return results[0]
+	return results[1]
 
 def init_params_output_layer(previousDimSize):
 	xavier_variance = math.sqrt(2.0 / float(previousDimSize + ARGS.numberOfInputCodes))
 	tPARAMS['W_output'] = theano.shared(np.random.normal(0., xavier_variance, (previousDimSize, ARGS.numberOfInputCodes)).astype(config.floatX), 'W_output')
+	# tPARAMS['W_rnn'] = theano.shared(np.random.normal(0., xavier_variance, (previousDimSize, ARGS.numberOfInputCodes)).astype(config.floatX), 'W_rnn')
 	tPARAMS['b_output'] = theano.shared(np.zeros(ARGS.numberOfInputCodes).astype(config.floatX), name='b_output')
 	tPARAMS['olrelu'] = theano.shared(0.1, name='olrelu')
 
@@ -199,7 +182,8 @@ def build_model():
 		flowing_tensorf = dropout(flowing_tensorf)
 
 	results, _ = theano.scan(
-		lambda theFlowingTensor: T.nnet.softmax(T.nnet.relu(T.dot(theFlowingTensor, tPARAMS['W_output']) + tPARAMS['b_output'], tPARAMS['olrelu'])),
+		# lambda theFlowingTensor: T.nnet.softmax(T.nnet.relu(T.dot(theFlowingTensor, tPARAMS['W_output']) + tPARAMS['b_output'], tPARAMS['olrelu'])),
+		lambda theFlowingTensor: T.nnet.softmax(T.nnet.relu(T.dot(flowing_tensorf[-1], tPARAMS['W_output']) + tPARAMS['b_output'], tPARAMS['olrelu'])),
 		sequences=[flowing_tensorf],
 		outputs_info=None,
 		name='softmax_layer',
@@ -257,15 +241,10 @@ def load_data():
 	labels_trainSet = pickle.load(open(ARGS.inputFileRadical+'.train', 'rb'))
 	labels_testSet = pickle.load(open(ARGS.inputFileRadical+'.test', 'rb'))
 
-	# main_trainSet = split_by_strenght(main_trainSet, main_trainIntervalSet, threshold)
-	# labels_trainSet = split_by_strenght(labels_trainSet, main_trainIntervalSet, threshold)
+	main_trainSet = split_by_strenght(main_trainSet, main_trainIntervalSet, threshold)
+	labels_trainSet = split_by_strenght(labels_trainSet, main_trainIntervalSet, threshold)
 	# main_testSet = split_by_strenght(main_testSet, main_testIntervalSet, threshold)
 	# labels_testSet = split_by_strenght(labels_testSet, main_testIntervalSet, threshold)
-
-	# main_trainSet = remove_array_len_1(main_trainSet)
-	# labels_trainSet = remove_array_len_1(labels_trainSet)
-	# main_testSet = remove_array_len_1(main_testSet)
-	# labels_testSet = remove_array_len_1(labels_testSet)
 
 	train_sorted_index = sorted(range(len(main_trainSet)), key=lambda x: len(main_trainSet[x]))  #lambda x: len(seq[x]) --> f(x) return len(seq[x])
 	main_trainSet = [main_trainSet[i] for i in train_sorted_index]
@@ -312,7 +291,8 @@ def train_model():
 
 	print '==> model building'
 	xf, y, mask, nVisitsOfEachPatient_List, MODEL =  build_model()
-	grads = T.grad(theano.gradient.grad_clip(MODEL, -0.5, 0.5), wrt=tPARAMS.values())
+	grads = T.grad(MODEL, wrt=tPARAMS.values())
+
 	TRAIN_MODEL_COMPILED, UPDATE_WEIGHTS_COMPILED = addAdadeltaGradientDescent(grads, xf, y, mask, nVisitsOfEachPatient_List, MODEL)
 
 	print '==> training and validation'
