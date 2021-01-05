@@ -134,17 +134,19 @@ def build_model():
     prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
     L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
 
+    optimizer = tf.train.AdadeltaOptimizer(learning_rate=0.25, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+
     # global_step = tf.Variable(0, trainable=False)
     # starter_learning_rate = 1.0
     # learning_rate = tf.compat.v1.train.exponential_decay(starter_learning_rate, global_step, 1000, 0.96, staircase=True)
     # train_op = (tf.train.AdadeltaOptimizer(learning_rate=learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step))
 
-    optimizer = tf.train.AdadeltaOptimizer(learning_rate=0.5, rho=0.95, epsilon=1e-06)
-    gvs = optimizer.compute_gradients(L2_regularized_loss)
-    capped_gvs = [(tf.clip_by_value(grad, -0.25, 0.25), var) for grad, var in gvs]
-    train_op = optimizer.apply_gradients(capped_gvs)
+    # optimizer = tf.train.AdadeltaOptimizer(learning_rate=1.0, rho=0.95, epsilon=1e-06)
+    # gvs = optimizer.compute_gradients(L2_regularized_loss)
+    # capped_gvs = [(tf.clip_by_value(grad, -0.25, 0.25), var) for grad, var in gvs]
+    # train_op = optimizer.apply_gradients(capped_gvs)
 
-    return tf.global_variables_initializer(), graph, train_op, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
+    return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
 def train_model():
   print("==> data loading")
@@ -226,7 +228,7 @@ def parse_arguments():
   parser = argparse.ArgumentParser()
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .train and .test files) with pickled data organized as patient x admission x codes.')
   parser.add_argument('outFile', metavar='out_file', default='model_output', help='Any file directory to store the model.')
-  parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=20, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
+  parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=5, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
   parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
