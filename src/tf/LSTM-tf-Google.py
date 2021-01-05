@@ -4,7 +4,7 @@ import shutil
 import os
 import random
 
-from dt_rnn_cell import DT_RNNCell
+from dt_lstm_cell import DT_LSTMCell
 
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
@@ -94,12 +94,12 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
       #At the end, it returns the mean cross entropy considering all the batches
   return n_batches, crossEntropySum / dataCount
 
-def DTRNN_layer(inputTensor, seqLen):
-  rnns = [DT_RNNCell(size) for size in [[271, 271]]]
-  # drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate, seed=13713) for lstm in rnns]
-  cell = tf.nn.rnn_cell.MultiRNNCell(rnns, state_is_tuple=True)
-  rnn_outputs, _ = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
-  return rnn_outputs
+def DTLSTM_layer(inputTensor, seqLen):
+  lstms = [DT_LSTMCell(size, dtype=tf.float32, state_is_tuple=True) for size in [[271, 271]]]
+  lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate, seed=13713) for lstm in lstms]
+  cell = tf.nn.rnn_cell.MultiRNNCell(lstms, state_is_tuple=True)
+  lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+  return lstm_states[-1].c
 
 def FC_layer(inputTensor):
   im_dim = inputTensor.get_shape()[-1]
@@ -112,7 +112,8 @@ def FC_layer(inputTensor):
                        shape=[ARGS.numberOfInputCodes],
                        dtype=tf.float32,
                        initializer=tf.zeros_initializer())
-  output = tf.nn.softmax(tf.nn.relu(tf.add(tf.matmul(inputTensor, weights), bias)))
+
+  output = tf.nn.softmax(tf.nn.leaky_relu(tf.add(tf.matmul(inputTensor, weights), bias)))
   return output, weights
 
 
@@ -124,7 +125,7 @@ def build_model():
     maskf = tf.placeholder(tf.float32, [None, None], name="mask")
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
 
-    flowingTensor = DTRNN_layer(xf, seqLen)
+    flowingTensor = DTLSTM_layer(xf, seqLen)
     flowingTensor, weights = FC_layer(flowingTensor)
     flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
 
@@ -133,8 +134,17 @@ def build_model():
     prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
     L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
 
-    optimizer = tf.train.AdadeltaOptimizer(learning_rate=1.0, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
-    return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
+    # global_step = tf.Variable(0, trainable=False)
+    # starter_learning_rate = 1.0
+    # learning_rate = tf.compat.v1.train.exponential_decay(starter_learning_rate, global_step, 1000, 0.96, staircase=True)
+    # train_op = (tf.train.AdadeltaOptimizer(learning_rate=learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step))
+
+    optimizer = tf.train.AdadeltaOptimizer(learning_rate=0.5, rho=0.95, epsilon=1e-06)
+    gvs = optimizer.compute_gradients(L2_regularized_loss)
+    capped_gvs = [(tf.clip_by_value(grad, -0.25, 0.25), var) for grad, var in gvs]
+    train_op = optimizer.apply_gradients(capped_gvs)
+
+    return tf.global_variables_initializer(), graph, train_op, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
 def train_model():
   print("==> data loading")
@@ -216,7 +226,7 @@ def parse_arguments():
   parser = argparse.ArgumentParser()
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .train and .test files) with pickled data organized as patient x admission x codes.')
   parser.add_argument('outFile', metavar='out_file', default='model_output', help='Any file directory to store the model.')
-  parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=5, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
+  parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=20, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
   parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
