@@ -10,12 +10,13 @@ import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 
 class DT_RNNCell(tf.nn.rnn_cell.BasicRNNCell):
-  def __init__(self, num_units, activation=None):
-    super(DT_RNNCell, self).__init__(num_units=num_units)
+  def __init__(self, num_units, activation=None, name=None, dtype=None, use_noise=None):
+    super(DT_RNNCell, self).__init__(num_units=num_units, name=name, dtype=dtype)
 
     # Inputs must be 2-dimensional.
     self.input_spec = input_spec.InputSpec(ndim=2)
     self._num_units = num_units
+    self._use_noise = use_noise
 
     if activation:
       self._activation = activations.get(activation)
@@ -36,36 +37,43 @@ class DT_RNNCell(tf.nn.rnn_cell.BasicRNNCell):
       raise ValueError("Expected inputs.shape[-1] to be known, saw shape: %s" % str(inputs_shape))
 
     input_depth = inputs_shape[-1]
-    # self._kernel = self.add_variable(_WEIGHTS_VARIABLE_NAME, shape=[input_depth + self._num_units[0], self._num_units[0], self._num_units[1]])
-    # self._bias = self.add_variable(_BIAS_VARIABLE_NAME, shape=[self._num_units[1]], initializer=init_ops.zeros_initializer(dtype=self.dtype))
 
-    self._kernel = [self.add_variable(_WEIGHTS_VARIABLE_NAME+"_0", shape=[input_depth + self._num_units[0], self._num_units[0]], initializer=tf.keras.initializers.glorot_normal()), self.add_variable(_WEIGHTS_VARIABLE_NAME+"_1", shape=[self._num_units[0], self._num_units[1]], initializer=tf.keras.initializers.glorot_normal())]
+    self._kernel = [self.add_variable(_WEIGHTS_VARIABLE_NAME+"_0", shape=[input_depth + self._num_units[0], self._num_units[0]], initializer=tf.keras.initializers.glorot_normal())]
+    for i in range(1, len(self._num_units)):
+      self._kernel.append(self.add_variable(_WEIGHTS_VARIABLE_NAME+"_"+str(i), shape=[self._num_units[i-1], self._num_units[i]], initializer=tf.keras.initializers.glorot_normal()))
+
     self._bias = [self.add_variable(_BIAS_VARIABLE_NAME+"_0", shape=[self._num_units[0]], initializer=init_ops.zeros_initializer(dtype=self.dtype))]
+    for i in range(1, len(self._num_units)-1):
+      self._bias.append(self.add_variable(_BIAS_VARIABLE_NAME+"_"+str(i), shape=[self._num_units[i]], initializer=init_ops.zeros_initializer(dtype=self.dtype)))
+
     self.built = True
 
   def call(self, inputs, state):
-    """Most basic RNN: output = new_state = act(W * input + U * state + B)."""
+    # Most basic RNN: new_state = act(W * state + U * input).
     gate_inputs = array_ops.concat([inputs, state], 1)
     gate_inputs = math_ops.matmul(gate_inputs, self._kernel[0])
-    # gate_inputs = tf.tensordot(gate_inputs, self._kernel, axes=[[1],[0]])
-    # gate_inputs = nn_ops.bias_add(gate_inputs, self._bias[0])
-    # output = self._activation(gate_inputs)
-    # return output[:, :, -1], output[:, :, -1]
+    new_state = self._activation(gate_inputs)
 
-    output = math_ops.matmul(gate_inputs, self._kernel[1])
-    output = nn_ops.bias_add(output, self._bias[0])
-    output = self._activation(output)
+    if self._use_noise:
+      new_state = new_state + tf.random.normal(tf.shape(new_state), dtype=self.dtype)
 
-    # output = math_ops.matmul(output, self._kernel[2])
-    # output = nn_ops.bias_add(output, self._bias[1])
-    # output = self._activation(output)
-    return output, output
+    # Deepest RNN transitions: new_state = act(... W[3] * act(W[2] * act(... act(W[1] * new_state[0] + B[1]))))
+    for i in range(1, len(self._kernel)):
+      new_state = math_ops.matmul(new_state, self._kernel[i])
+      new_state = nn_ops.bias_add(new_state, self._bias[i-1])
+      new_state = self._activation(new_state)
+
+    if self._use_noise:
+      new_state = new_state + tf.random.normal(tf.shape(new_state), dtype=self.dtype)
+
+    return new_state, new_state
 
   def get_config(self):
     config = {
         "num_units": self._num_units,
         "activation": activations.serialize(self._activation)
     }
+
     base_config = super(DT_RNNCell, self).get_config()
     return dict(list(base_config.items()) + list(config.items()))
 
