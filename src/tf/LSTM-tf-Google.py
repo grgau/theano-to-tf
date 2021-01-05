@@ -96,7 +96,7 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
 
 def DTRNN_layer(inputTensor, seqLen):
   rnns = [DT_RNNCell(size) for size in [[271, 271]]]
-  # drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate, seed=13713) for lstm in rnns]
+  rnns = [tf.nn.rnn_cell.DropoutWrapper(rnn, state_keep_prob=ARGS.dropoutRate, seed=13713) for rnn in rnns]
   cell = tf.nn.rnn_cell.MultiRNNCell(rnns, state_is_tuple=True)
   rnn_outputs, _ = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
   return rnn_outputs
@@ -112,7 +112,8 @@ def FC_layer(inputTensor):
                        shape=[ARGS.numberOfInputCodes],
                        dtype=tf.float32,
                        initializer=tf.zeros_initializer())
-  output = tf.nn.softmax(tf.nn.relu(tf.add(tf.matmul(inputTensor, weights), bias)))
+
+  output = tf.nn.softmax(tf.nn.leaky_relu(tf.add(tf.matmul(inputTensor, weights), bias)))
   return output, weights
 
 
@@ -133,8 +134,14 @@ def build_model():
     prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
     L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
 
-    optimizer = tf.train.AdadeltaOptimizer(learning_rate=1.0, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
-    return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
+    # optimizer = tf.train.AdadeltaOptimizer(learning_rate=1.0, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+
+    optimizer = tf.train.AdadeltaOptimizer(learning_rate=0.25, rho=0.95, epsilon=1e-06)
+    gvs = optimizer.compute_gradients(L2_regularized_loss)
+    capped_gvs = [(tf.clip_by_value(grad, -0.5, 0.5), var) for grad, var in gvs]
+    train_op = optimizer.apply_gradients(capped_gvs)
+
+    return tf.global_variables_initializer(), graph, train_op, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
 def train_model():
   print("==> data loading")
@@ -216,7 +223,7 @@ def parse_arguments():
   parser = argparse.ArgumentParser()
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .train and .test files) with pickled data organized as patient x admission x codes.')
   parser.add_argument('outFile', metavar='out_file', default='model_output', help='Any file directory to store the model.')
-  parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=5, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
+  parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=20, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
   parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
