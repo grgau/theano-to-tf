@@ -11,8 +11,8 @@ _WEIGHTS_VARIABLE_NAME = "kernel"
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 
-class DT_LSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
-  def __init__(self, num_units, forget_bias=1.0, state_is_tuple=True, activation=None, name=None, dtype=None):
+class DT_LSTMCell(tf.nn.rnn_cell.BasicLSTMCell): # Based on Tensorflow's BasicLSTMCell
+  def __init__(self, num_units, forget_bias=1.0, state_is_tuple=True, activation=None, transition_activation=None, name=None, dtype=None):
     super(DT_LSTMCell, self).__init__(num_units=num_units, name=name, dtype=dtype)
 
     # Inputs must be 2-dimensional.
@@ -25,6 +25,11 @@ class DT_LSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
       self._activation = activations.get(activation)
     else:
       self._activation = math_ops.tanh
+
+    if transition_activation:
+      self._transition_activation = activations.get(activation)
+    else:
+      self._transition_activation = tf.nn.leaky_relu
 
   @property
   def state_size(self):
@@ -43,10 +48,12 @@ class DT_LSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
     input_depth = inputs_shape[-1]
     h_depth = self._num_units[0]
 
+    # Kernel list for deep transition
     self._kernel = [self.add_variable(_WEIGHTS_VARIABLE_NAME+"_0", shape=[input_depth + h_depth, 4 * self._num_units[0]], initializer=tf.keras.initializers.glorot_normal())]
     for i in range(1, len(self._num_units)):
       self._kernel.append(self.add_variable(_WEIGHTS_VARIABLE_NAME+"_"+str(i), shape=[self._num_units[i-1], self._num_units[i]], initializer=tf.keras.initializers.glorot_normal()))
 
+    # Bias list for deep transition
     self._bias = [self.add_variable(_BIAS_VARIABLE_NAME+"_0", shape=[4 * self._num_units[0]], initializer=init_ops.zeros_initializer(dtype=self.dtype))]
     for i in range(1, len(self._num_units)):
       self._bias.append(self.add_variable(_BIAS_VARIABLE_NAME+"_"+str(i), shape=[self._num_units[i]], initializer=init_ops.zeros_initializer(dtype=self.dtype)))
@@ -79,10 +86,11 @@ class DT_LSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
         multiply(sigmoid(i), self._activation(j)))
     new_h = multiply(self._activation(new_c), sigmoid(o))
 
+    # Deep transition between hidden states
     for i in range(1, len(self._kernel)):
       new_h = math_ops.matmul(new_h, self._kernel[i])
       new_h = nn_ops.bias_add(new_h, self._bias[i])
-      new_h = tf.nn.leaky_relu(new_h)
+      new_h = self._transition_activation(new_h)
 
     if self._state_is_tuple:
       new_state = tf.nn.rnn_cell.LSTMStateTuple(new_c, new_h)
