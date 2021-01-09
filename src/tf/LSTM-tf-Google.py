@@ -5,6 +5,7 @@ import os
 import random
 
 import tensorflow.compat.v1 as tf
+
 tf.disable_v2_behavior()
 import numpy as np
 
@@ -92,13 +93,81 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
       #At the end, it returns the mean cross entropy considering all the batches
   return n_batches, crossEntropySum / dataCount
 
-def LSTMGoogle_layer(inputTensor, seqLen):
-  # lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=False) for size in ARGS.hiddenDimSize]
-  lstms = [tf.nn.rnn_cell.LSTMCell(size, use_peepholes=True, num_proj=size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-  drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
-  cell = tf.nn.rnn_cell.MultiRNNCell(drops)
-  lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
-  return lstm_states[-1].c #lstm_states has shape (c, h) where c are the cell states and h the hidden states
+def EncoderDecoderBahdanau_layer(inputTensor, seqLen):
+  # Encoder
+  with tf.variable_scope('encoder_cell'):
+    lstms = [tf.nn.rnn_cell.LSTMCell(size, num_proj=size, state_is_tuple=True, initializer=tf.keras.initializers.glorot_normal()) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
+    lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
+    cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
+    lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+
+  with tf.variable_scope('decoder_cell'):
+    # Bahdanau Attention
+    query_with_time_axis = tf.expand_dims(lstm_states[-1].h, axis=1)
+    score = tf.keras.layers.Dense(1)(
+      tf.nn.tanh(
+        tf.keras.layers.Dense(ARGS.attentionDimSize)(query_with_time_axis) + \
+        tf.keras.layers.Dense(ARGS.attentionDimSize)(tf.transpose(lstm_outputs, [1, 0, 2]))
+      )
+    )
+    attention_weights = tf.nn.softmax(score, axis=1)
+    context_vector = attention_weights * tf.transpose(lstm_outputs, [1, 0, 2])
+    context_vector = tf.reduce_sum(context_vector, axis=1)
+
+    context_vector = tf.expand_dims(context_vector, axis=0)
+    context_vector = tf.tile(context_vector, multiples=[tf.shape(inputTensor)[0], 1, 1])
+    inputTensor = tf.concat([context_vector, inputTensor], axis=-1)
+
+    # Decoder
+    lstms = [tf.nn.rnn_cell.LSTMCell(size, num_proj=size, state_is_tuple=True, initializer=tf.keras.initializers.glorot_normal()) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
+    lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
+    cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
+    _, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, initial_state=lstm_states, dtype=tf.float32)
+    return lstm_states[-1].c #lstm_states has shape (c, h) where c are the cell states and h the hidden states
+
+def EncoderDecoderLuong_layer(inputTensor, seqLen):
+  # Encoder
+  with tf.variable_scope('encoder_cell'):
+    lstms = [tf.nn.rnn_cell.LSTMCell(size, state_is_tuple=True, initializer=tf.keras.initializers.glorot_normal()) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
+    lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
+    cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
+    lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+
+  with tf.variable_scope('decoder_cell'):
+    # Decoder
+    lstms = [tf.nn.rnn_cell.LSTMCell(size, num_proj=size, state_is_tuple=True, initializer=tf.keras.initializers.glorot_normal()) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
+    lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
+    cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
+    lstm_dec_outputs, lstm_dec_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, initial_state=lstm_states, dtype=tf.float32)
+
+    # Luong Attention
+    # Dot
+    # score = tf.matmul(lstm_outputs, tf.transpose(lstm_dec_outputs, [0, 2, 1]))
+    # attention_weights = tf.nn.softmax(score, axis=0)
+    # context_vector = tf.matmul(attention_weights, lstm_outputs)
+    # output = tf.concat([lstm_dec_outputs, context_vector], axis=-1)
+
+    # General
+    # W = tf.keras.layers.Dense(lstm_dec_outputs.shape[-1], use_bias=False)(lstm_dec_outputs)
+    # score = tf.matmul(lstm_outputs, tf.transpose(W, [0, 2, 1]))
+    # attention_weights = tf.nn.softmax(score, axis=0)
+    # context_vector = tf.matmul(attention_weights, lstm_outputs)
+    # output = tf.concat([lstm_dec_outputs, context_vector], axis=-1)
+
+    # Dot with states
+    score = tf.matmul(lstm_states[-1].c, tf.transpose(lstm_dec_states[-1].c))
+    attention_weights = tf.nn.softmax(score, axis=0)
+    context_vector = tf.matmul(attention_weights, lstm_states[-1].c)
+    output = tf.concat([lstm_dec_states[-1].c, context_vector], axis=-1)
+
+    # General with states
+    # W = tf.keras.layers.Dense(lstm_dec_states[-1].c.shape[-1], use_bias=False)(lstm_dec_states[-1].c)
+    # score = tf.matmul(lstm_states[-1].c, tf.transpose(W))
+    # attention_weights = tf.nn.softmax(score, axis=0)
+    # context_vector = tf.matmul(attention_weights, lstm_states[-1].c)
+    # output = tf.concat([lstm_dec_states[-1].c, context_vector], axis=-1)
+
+    return output
 
 def FC_layer(inputTensor):
   im_dim = inputTensor.get_shape()[-1]
@@ -111,7 +180,7 @@ def FC_layer(inputTensor):
                        shape=[ARGS.numberOfInputCodes],
                        dtype=tf.float32,
                        initializer=tf.zeros_initializer())
-  output = tf.nn.softmax(tf.nn.relu(tf.add(tf.matmul(inputTensor, weights), bias)))
+  output = tf.nn.softmax(tf.nn.leaky_relu(tf.add(tf.matmul(inputTensor, weights), bias)))
   return output, weights
 
 
@@ -123,7 +192,7 @@ def build_model():
     maskf = tf.placeholder(tf.float32, [None, None], name="mask")
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
 
-    flowingTensor = LSTMGoogle_layer(xf, seqLen)
+    flowingTensor = EncoderDecoderBahdanau_layer(xf, seqLen)
     flowingTensor, weights = FC_layer(flowingTensor)
     flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
 
@@ -132,7 +201,23 @@ def build_model():
     prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
     L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
 
-    optimizer = tf.train.AdadeltaOptimizer(learning_rate=1.0, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+    # optimizer = tf.train.AdadeltaOptimizer(learning_rate=0.5, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+
+    # Bahdanau (855)
+    global_step = tf.Variable(0, trainable=False)
+    learning_rate = tf.train.exponential_decay(1.0, global_step, 1000, 0.68)
+    optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
+
+    # Bahdanau (271)
+    # global_step = tf.Variable(0, trainable=False)
+    # learning_rate = tf.train.exponential_decay(1.0, global_step, 100, 0.87)
+    # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
+
+    # Luong
+    # global_step = tf.Variable(0, trainable=False)
+    # learning_rate = tf.train.exponential_decay(1.0, global_step, 100, 0.9)
+    # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
+
     return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
 def train_model():
@@ -215,8 +300,9 @@ def parse_arguments():
   parser = argparse.ArgumentParser()
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .train and .test files) with pickled data organized as patient x admission x codes.')
   parser.add_argument('outFile', metavar='out_file', default='model_output', help='Any file directory to store the model.')
-  parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=5, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
+  parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=10, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
   parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
+  parser.add_argument('--attentionDimSize', type=int, default=15, help='Number of attention layer dense units')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
