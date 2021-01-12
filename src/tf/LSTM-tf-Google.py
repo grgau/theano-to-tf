@@ -99,7 +99,7 @@ def DTLSTM_layer(inputTensor, seqLen):
   lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate, seed=13713) for lstm in lstms]
   cell = tf.nn.rnn_cell.MultiRNNCell(lstms, state_is_tuple=True)
   lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
-  return lstm_states[-1].c
+  return lstm_states[-1].h
 
 def FC_layer(inputTensor):
   im_dim = inputTensor.get_shape()[-1]
@@ -134,7 +134,7 @@ def build_model():
     prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
     L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
 
-    optimizer = tf.train.AdadeltaOptimizer(learning_rate=0.25, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+    optimizer = tf.train.AdadeltaOptimizer(learning_rate=0.5, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
 
     # global_step = tf.Variable(0, trainable=False)
     # starter_learning_rate = 1.0

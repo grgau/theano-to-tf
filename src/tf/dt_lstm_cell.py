@@ -29,7 +29,8 @@ class DT_LSTMCell(tf.nn.rnn_cell.BasicLSTMCell): # Based on Tensorflow's BasicLS
     if transition_activation:
       self._transition_activation = activations.get(activation)
     else:
-      self._transition_activation = tf.nn.leaky_relu
+      self._transition_activation = tf.nn.relu
+      # self._transition_activation = math_ops.tanh
 
   @property
   def state_size(self):
@@ -51,12 +52,12 @@ class DT_LSTMCell(tf.nn.rnn_cell.BasicLSTMCell): # Based on Tensorflow's BasicLS
     # Kernel list for deep transition
     self._kernel = [self.add_variable(_WEIGHTS_VARIABLE_NAME+"_0", shape=[input_depth + h_depth, 4 * self._num_units[0]], initializer=tf.keras.initializers.glorot_normal())]
     for i in range(1, len(self._num_units)):
-      self._kernel.append(self.add_variable(_WEIGHTS_VARIABLE_NAME+"_"+str(i), shape=[self._num_units[i-1], self._num_units[i]], initializer=tf.keras.initializers.glorot_normal()))
+      self._kernel.append(self.add_variable(_WEIGHTS_VARIABLE_NAME+"_"+str(i), shape=[input_depth + h_depth, 4 * self._num_units[i]], initializer=tf.keras.initializers.glorot_normal()))
 
     # Bias list for deep transition
     self._bias = [self.add_variable(_BIAS_VARIABLE_NAME+"_0", shape=[4 * self._num_units[0]], initializer=init_ops.zeros_initializer(dtype=self.dtype))]
     for i in range(1, len(self._num_units)):
-      self._bias.append(self.add_variable(_BIAS_VARIABLE_NAME+"_"+str(i), shape=[self._num_units[i]], initializer=init_ops.zeros_initializer(dtype=self.dtype)))
+      self._bias.append(self.add_variable(_BIAS_VARIABLE_NAME+"_"+str(i), shape=[4 * self._num_units[i]], initializer=init_ops.zeros_initializer(dtype=self.dtype)))
 
     self.built = True
 
@@ -88,9 +89,22 @@ class DT_LSTMCell(tf.nn.rnn_cell.BasicLSTMCell): # Based on Tensorflow's BasicLS
 
     # Deep transition between hidden states
     for i in range(1, len(self._kernel)):
-      new_h = math_ops.matmul(new_h, self._kernel[i])
-      new_h = nn_ops.bias_add(new_h, self._bias[i])
-      new_h = self._transition_activation(new_h)
+      gate_inputs = math_ops.matmul(array_ops.concat([inputs, new_h], 1), self._kernel[i])
+      gate_inputs = nn_ops.bias_add(gate_inputs, self._bias[i])
+
+      i, j, f, o = array_ops.split(value=gate_inputs, num_or_size_splits=4, axis=one)
+      forget_bias_tensor = constant_op.constant(self._forget_bias, dtype=f.dtype)
+
+      add = math_ops.add
+      multiply = math_ops.multiply
+      new_c = add(
+        multiply(new_c, sigmoid(add(f, forget_bias_tensor))),
+        multiply(sigmoid(i), self._activation(j)))
+      new_h = multiply(self._transition_activation(new_c), sigmoid(o))
+
+      # new_h = math_ops.matmul(new_h, self._kernel[i])
+      # new_h = nn_ops.bias_add(new_h, self._bias[i])
+      # new_h = self._transition_activation(new_h)
 
     if self._state_is_tuple:
       new_state = tf.nn.rnn_cell.LSTMStateTuple(new_c, new_h)
@@ -110,9 +124,9 @@ class DT_LSTMCell(tf.nn.rnn_cell.BasicLSTMCell): # Based on Tensorflow's BasicLS
     base_config = super(DT_LSTMCell, self).get_config()
     return dict(list(base_config.items()) + list(config.items()))
 
-# inputTensor = tf.placeholder(tf.float32, [None, None, 855], name="inputs")
-# seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
-#
-# rnns = [DT_LSTMCell(size) for size in [[271, 271]]]
-# cell = tf.nn.rnn_cell.MultiRNNCell(rnns, state_is_tuple=True)
-# outputs, states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+inputTensor = tf.placeholder(tf.float32, [None, None, 855], name="inputs")
+seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
+
+rnns = [DT_LSTMCell(size) for size in [[271, 271]]]
+cell = tf.nn.rnn_cell.MultiRNNCell(rnns, state_is_tuple=True)
+outputs, states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
