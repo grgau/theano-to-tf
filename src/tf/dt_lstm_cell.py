@@ -29,8 +29,8 @@ class DT_LSTMCell(tf.nn.rnn_cell.BasicLSTMCell): # Based on Tensorflow's BasicLS
     if transition_activation:
       self._transition_activation = activations.get(activation)
     else:
-      self._transition_activation = tf.nn.relu
-      # self._transition_activation = math_ops.tanh
+      # self._transition_activation = tf.nn.relu
+      self._transition_activation = math_ops.tanh
 
   @property
   def state_size(self):

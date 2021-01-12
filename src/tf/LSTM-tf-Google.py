@@ -95,11 +95,11 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
   return n_batches, crossEntropySum / dataCount
 
 def DTLSTM_layer(inputTensor, seqLen):
-  lstms = [DT_LSTMCell(size, dtype=tf.float32, state_is_tuple=True) for size in [[271, 271]]]
+  lstms = [DT_LSTMCell(size, dtype=tf.float32, state_is_tuple=True) for size in [[271, 271, 271, 271]]]
   lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate, seed=13713) for lstm in lstms]
   cell = tf.nn.rnn_cell.MultiRNNCell(lstms, state_is_tuple=True)
   lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
-  return lstm_states[-1].h
+  return lstm_states[-1].c
 
 def FC_layer(inputTensor):
   im_dim = inputTensor.get_shape()[-1]
@@ -113,7 +113,7 @@ def FC_layer(inputTensor):
                        dtype=tf.float32,
                        initializer=tf.zeros_initializer())
 
-  output = tf.nn.softmax(tf.nn.leaky_relu(tf.add(tf.matmul(inputTensor, weights), bias)))
+  output = tf.nn.softmax(tf.nn.relu(tf.add(tf.matmul(inputTensor, weights), bias)))
   return output, weights
 
 
