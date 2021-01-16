@@ -134,8 +134,10 @@ def EncoderDecoderBahdanau_layer(inputTensor, seqLen):
     final_outputs, final_state, _ = tfa.seq2seq.dynamic_decode(decoder=decoder, output_time_major=True, decoder_init_input=inputTensor, maximum_iterations=1,
                                                                decoder_init_kwargs={"initial_state": lstm_states, "sequence_length":seqLen})
 
-    return final_state[-1].c
-    # return final_state[-1].c #lstm_states has shape (c, h) where c are the cell states and h the hidden states
+    if ARGS.state == "cell":
+      return final_state[-1].c #lstm_states has shape (c, h) where c are the cell states and h the hidden states
+    elif ARGS.state == "hidden":
+      return final_state[-1].h #lstm_states has shape (c, h) where c are the cell states and h the hidden states
 
 # def EncoderDecoderLuong_layer(inputTensor, seqLen):
 #   # Encoder
@@ -313,7 +315,8 @@ def parse_arguments():
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .train and .test files) with pickled data organized as patient x admission x codes.')
   parser.add_argument('outFile', metavar='out_file', default='model_output', help='Any file directory to store the model.')
   parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=10, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
-  parser.add_argument('--hiddenDimSize', type=str, default='[542]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
+  parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
+  parser.add_argument('--state', type=str, default='cell', help='Pass cell or hidden to fully connected layer')
   parser.add_argument('--attentionDimSize', type=int, default=3, help='Number of attention layer dense units')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
