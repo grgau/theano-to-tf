@@ -32,7 +32,7 @@ def prepareHotVectors(train_tensor, labels_tensor):
   y_hotvectors_tensor = np.zeros((maxNumberOfAdmissions, numberOfPatients, ARGS.numberOfInputCodes)).astype(np.float64)
   mask = np.zeros((maxNumberOfAdmissions, numberOfPatients)).astype(np.float64)
 
-  for idx, (train_patient_matrix,label_patient_matrix) in enumerate(zip(train_tensor,labels_tensor)):
+  for idx, (train_patient_matrix,label_patient_matrix) in enumerate(zip(train_tensor, labels_tensor)):
     for i_th_visit, visit_line in enumerate(train_patient_matrix[:-1]): #ignores the last admission, which is not part of the training
       for code in visit_line:
         x_hotvectors_tensorf[i_th_visit, idx, code] = 1
@@ -72,7 +72,7 @@ def load_data():
 
   return trainSet, testSet
 
-def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
+def performEvaluation(session, loss, x, y, mask, seqLen, training, test_Set):
   batchSize = ARGS.batchSize
 
   n_batches = int(np.ceil(float(len(test_Set[0])) / float(batchSize))) #default batch size is 100
@@ -85,7 +85,14 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
       batchY = test_Set[1][index * batchSize:(index + 1) * batchSize]
       xf, yf, maskf, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
 
-      feed_dict = {x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List}
+      # start_token = np.full((xf.shape[0], xf.shape[1], 1), 100)
+      # xf = np.concatenate([start_token, xf], axis=-1)
+      # yf = np.concatenate([start_token, yf], axis=-1)
+      #
+      # end_token = np.full((yf.shape[0], yf.shape[1], 1), 200)
+      # yf = np.concatenate([yf, end_token], axis=-1)
+
+      feed_dict = {x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List, training: True}
       crossEntropy = sess.run(loss, feed_dict=feed_dict)
 
       #accumulation by simple summation taking the batch size into account
@@ -94,7 +101,7 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
       #At the end, it returns the mean cross entropy considering all the batches
   return n_batches, crossEntropySum / dataCount
 
-def EncoderDecoderBahdanau_layer(inputTensor, seqLen):
+def EncoderDecoderBahdanau_layer(inputTensor, targetTensor, seqLen):
   # Encoder
   with tf.variable_scope('encoder_cell'):
     lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
@@ -117,22 +124,45 @@ def EncoderDecoderBahdanau_layer(inputTensor, seqLen):
     context_vector = tf.reduce_sum(context_vector, axis=1)
 
     context_vector = tf.expand_dims(context_vector, axis=0)
-    context_vector = tf.tile(context_vector, multiples=[tf.shape(inputTensor)[0], 1, 1])
-    inputTensor = tf.concat([context_vector, inputTensor], axis=-1)
+    context_vector = tf.tile(context_vector, multiples=[tf.shape(lstm_outputs)[0], 1, 1])
+    lstm_outputs = tf.concat([context_vector, lstm_outputs], axis=-1)
 
     # Decoder
     lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-    lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
+    # lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
     cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
 
     sampler = tfa.seq2seq.sampler.TrainingSampler(time_major=True)
-    sampler.initialize(inputTensor, sequence_length=seqLen)
+    # sampler.initialize(targetTensor, sequence_length=seqLen)
     decoder = tfa.seq2seq.BasicDecoder(cell, sampler=sampler)
-    decoder.initialize(inputTensor, initial_state=lstm_states)
+    # decoder.initialize(targetTensor, initial_state=lstm_states)
+
+    # else:
+    #   # Inference
+    #   inference_sampler = tfa.seq2seq.GreedyEmbeddingSampler()
+    #   inference_sampler.initialize(inputTensor, start_tokens=tf.fill([ARGS.batchSize], 100), end_token=200)
+    #   decoder = tfa.seq2seq.BasicDecoder(cell, sampler=inference_sampler)
+    #   decoder.initialize(inputTensor, initial_state=final_state)
 
     # maximum_iterations=41
-    final_outputs, final_state, _ = tfa.seq2seq.dynamic_decode(decoder=decoder, output_time_major=True, decoder_init_input=inputTensor, maximum_iterations=1,
+    final_outputs, final_state, _ = tfa.seq2seq.dynamic_decode(decoder=decoder, output_time_major=True, decoder_init_input=lstm_outputs,
                                                                decoder_init_kwargs={"initial_state": lstm_states, "sequence_length":seqLen})
+    #
+    # with tf.variable_scope('decoder_cell', reuse=True):
+    #   # start_tokens = tf.tile(tf.constant([100], dtype=tf.int32), [ARGS.batchSize], name='start_tokens')
+    #   start_tokens = tf.fill([ARGS.batchSize], 100)
+    #   # start_tokens = tf.fill([ARGS.batchSize], 100)
+    #   embedding_layer = tf.keras.layers.Embedding(271, 273)
+    #
+    #   inference_sampler = tfa.seq2seq.GreedyEmbeddingSampler(embedding_layer)
+    #   # inference_sampler = tfa.seq2seq.GreedyEmbeddingSampler()
+    #   # inference_sampler.initialize(targetTensor, start_tokens=start_tokens, end_token=200)
+    #
+    #   decoder = tfa.seq2seq.BasicDecoder(cell, sampler=inference_sampler)
+    #   # decoder.initialize(targetTensor, initial_state=lstm_states)
+    #
+    #   final_outputs, final_state, _ = decoder(None, start_tokens=start_tokens, end_token=200, initial_state=lstm_states)
+
 
     if ARGS.state == "cell":
       return final_state[-1].c #lstm_states has shape (c, h) where c are the cell states and h the hidden states
@@ -205,8 +235,10 @@ def build_model():
     yf = tf.placeholder(tf.float32, [None, None, ARGS.numberOfInputCodes], name="labels")
     maskf = tf.placeholder(tf.float32, [None, None], name="mask")
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
+    training = tf.placeholder(tf.bool)
 
-    flowingTensor = EncoderDecoderBahdanau_layer(xf, seqLen)
+    # flowingTensor = tf.cond(tf.less(x, y), lambda:EncoderDecoderBahdanau_layer(xf, yf, seqLen), lambda:xf)
+    flowingTensor = EncoderDecoderBahdanau_layer(xf, yf, seqLen)
     flowingTensor, weights = FC_layer(flowingTensor)
     flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
 
@@ -232,14 +264,14 @@ def build_model():
     # learning_rate = tf.train.exponential_decay(1.0, global_step, 100, 0.9)
     # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
 
-    return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
+    return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, training, flowingTensor
 
 def train_model():
   print("==> data loading")
   trainSet, testSet = load_data()
 
   print("==> model building")
-  init, graph, optimizer, loss, x, y, mask, seqLen, predictions = build_model()
+  init, graph, optimizer, loss, x, y, mask, seqLen, training, predictions = build_model()
 
   print ("==> training and validation")
   batchSize = ARGS.batchSize
@@ -265,14 +297,21 @@ def train_model():
         xf, yf, maskf, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
         xf += np.random.normal(0, 0.1, xf.shape)
 
-        feed_dict = {x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List}
+        # start_token = np.full((xf.shape[0], xf.shape[1], 1), 100)
+        # # xf = np.concatenate([start_token, xf], axis=-1)
+        # yf = np.concatenate([start_token, yf], axis=-1)
+        #
+        # end_token = np.full((yf.shape[0], yf.shape[1], 1), 200)
+        # yf = np.concatenate([yf, end_token], axis=-1)
+
+        feed_dict = {x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List, training: True}
         _, trainCrossEntropy = sess.run([optimizer, loss], feed_dict=feed_dict)
 
         trainCrossEntropyVector.append(trainCrossEntropy)
         iteration += 1
 
       print('-> Epoch: %d, mean cross entropy considering %d TRAINING batches: %f' % (epoch_counter, n_batches, np.mean(trainCrossEntropyVector)))
-      nValidBatches, validationCrossEntropy = performEvaluation(sess, loss, x, y, mask, seqLen, testSet)
+      nValidBatches, validationCrossEntropy = performEvaluation(sess, loss, x, y, mask, seqLen, training, testSet)
       print('      mean cross entropy considering %d VALIDATION batches: %f' % (nValidBatches, validationCrossEntropy))
 
       if validationCrossEntropy < bestValidationCrossEntropy:
@@ -288,7 +327,7 @@ def train_model():
         if os.path.exists(bestModelDirName):
           shutil.rmtree(bestModelDirName)
 
-        signature = tf.saved_model.signature_def_utils.predict_signature_def(inputs= {"inputs": x, "mask": mask, "seqLen": seqLen}, outputs= {"predictions": predictions})
+        signature = tf.saved_model.signature_def_utils.predict_signature_def(inputs= {"inputs": x, "labels": y, "mask": mask, "seqLen": seqLen}, outputs= {"predictions": predictions})
         builder = tf.saved_model.builder.SavedModelBuilder(bestModelDirName)
         builder.add_meta_graph_and_variables(sess, [tf.saved_model.tag_constants.SERVING], signature_def_map={'model': signature})
         builder.save()
