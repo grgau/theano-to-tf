@@ -4,10 +4,11 @@ import shutil
 import os
 import random
 
-import tensorflow.compat.v1 as tf
-import tensorflow_addons as tfa
+import tensorflow as tf
+# import tensorflow.compat.v1 as tf
+# import tensorflow_addons as tfa
 
-tf.disable_v2_behavior()
+# tf.disable_v2_behavior()
 import numpy as np
 
 global ARGS
@@ -89,8 +90,11 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
       # xf = np.concatenate([start_token, xf], axis=-1)
       # yf = np.concatenate([start_token, yf], axis=-1)
       #
-      # end_token = np.full((yf.shape[0], yf.shape[1], 1), 200)
+      # end_token = np.full((yf.shape[0], yf.shape[1], 1), 2)
       # yf = np.concatenate([yf, end_token], axis=-1)
+
+      start_token = np.full((yf.shape[0], yf.shape[1], 1), 100)
+      yf = np.concatenate([start_token, yf], axis=-1)
 
       feed_dict = {x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List}
       crossEntropy = sess.run(loss, feed_dict=feed_dict)
@@ -102,11 +106,13 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
   return n_batches, crossEntropySum / dataCount
 
 def EncoderDecoderBahdanau_layer(inputTensor, targetTensor, vocab, seqLen):
+  projection_layer = tf.layers.Dense(units=1, kernel_initializer=tf.truncated_normal_initializer(mean=0.0, stddev=0.1))
+
   # Encoder
   with tf.variable_scope('encoder_cell'):
-    lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-    lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
-    cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
+    lstms = [tf.contrib.rnn.LSTMCell(size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
+    lstms = [tf.contrib.rnn.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
+    cell = tf.contrib.rnn.MultiRNNCell(lstms)
     lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
 
   with tf.variable_scope('decoder_cell'):
@@ -128,84 +134,76 @@ def EncoderDecoderBahdanau_layer(inputTensor, targetTensor, vocab, seqLen):
     # lstm_outputs = tf.concat([context_vector, lstm_outputs], axis=-1)
 
     # Decoder
-    lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-    lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
-    dec_cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
-
-    sampler = tfa.seq2seq.sampler.TrainingSampler(time_major=True)
-    decoder = tfa.seq2seq.BasicDecoder(dec_cell, sampler=sampler)
+    lstms = [tf.contrib.rnn.LSTMCell(size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
+    lstms = [tf.contrib.rnn.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
+    dec_cell = tf.contrib.rnn.MultiRNNCell(lstms)
+    # dec_cell = tf.keras.layers.LSTMCell(271)
 
     go_token = -1.
     go_tokens = tf.fill((1, tf.shape(targetTensor)[1], ARGS.numberOfInputCodes), go_token)
     dec_input = tf.concat([go_tokens, targetTensor], axis=0)
 
-    # maximum_iterations=41
-    final_outputs, final_state, _ = tfa.seq2seq.dynamic_decode(decoder=decoder, output_time_major=True, decoder_init_input=dec_input,
-                                                               decoder_init_kwargs={"initial_state": lstm_states, "sequence_length":seqLen})
+    helper = tf.contrib.seq2seq.TrainingHelper(dec_input, seqLen, time_major=True)
+    decoder = tf.contrib.seq2seq.BasicDecoder(dec_cell, helper, lstm_states)
 
-    # with tf.variable_scope('decoder_cell', reuse=True):
-    #   start_tokens = tf.fill((tf.shape(targetTensor)[1], 1), go_token)
-    #   inference_sampler = tfa.seq2seq.sampler.InferenceSampler(
-    #     sample_fn=lambda outputs: outputs,
-    #     sample_shape=[271],
-    #     sample_dtype=tf.float32,
-    #     end_fn=lambda sample_ids: False)
-    #
-    #   inference_sampler.initialize(start_inputs=start_tokens)
-    #   inference_decoder = tfa.seq2seq.BasicDecoder(dec_cell, sampler=inference_sampler)
-    #
-    #   decoder_init_input = tf.fill((100, tf.shape(targetTensor)[-1] + tf.shape(lstm_states[-1].h)[-1]), 0.0)
-    #   final_outputs, final_state, _ = tfa.seq2seq.dynamic_decode(decoder=inference_decoder, output_time_major=True, decoder_init_input=decoder_init_input,
-    #                                                            decoder_init_kwargs={"initial_state": lstm_states})
+    # go_token = -1.
+    # go_tokens = tf.fill((1, tf.shape(targetTensor)[1], ARGS.numberOfInputCodes+1), go_token)
+    # dec_input = tf.concat([go_tokens, targetTensor], axis=0)
+
+    # initial_state = dec_cell.get_initial_state(inputTensor)
+    # maximum_iterations=41
+    final_outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=decoder, impute_finished=True, maximum_iterations=41, projection_layer=projection_layer)
+
+    with tf.variable_scope('decoder_cell', reuse=True):
+      start_tokens = tf.fill([tf.shape(targetTensor)[1], ARGS.numberOfInputCodes], go_token)
+      inference_helper = tf.contrib.seq2seq.InferenceHelper(
+        sample_fn=lambda outputs: outputs,
+        sample_shape=[1],
+        sample_dtype=tf.float32,
+        start_inputs=start_tokens,
+        end_fn=lambda sample_ids: False)
+      inference_decoder = tf.contrib.seq2seq.BasicDecoder(dec_cell, inference_helper, lstm_states)
+      final_outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=inference_decoder, projection_layer=projection_layer)
+
+
+      # sampler = tfa.seq2seq.GreedyEmbeddingSampler(embedding_layer)
+      # decoder = tfa.seq2seq.BasicDecoder(dec_cell, sampler, maximum_iterations=10)
+
+      # end_token = 2
+      # end_tokens = tf.fill([tf.shape(targetTensor)[0], tf.shape(targetTensor)[1], 1], 2.)
+      # targetTensor = tf.concat([targetTensor, end_tokens], axis=-1)
+      # initial_state = dec_cell.get_initial_state(batch_size=tf.shape(targetTensor)[1], dtype=tf.float32)
+
+      # final_outputs, final_state, final_lengths = decoder(None, start_tokens=start_tokens, end_token=end_token, initial_state=initial_state)
+
+      # start_tokens = tf.fill((tf.shape(targetTensor)[1], ), go_token)
+      # start_tokens = tf.cast(start_tokens, dtype=tf.int32)
+      # inference_sampler = tfa.seq2seq.sampler.InferenceSampler(
+      #   sample_fn=lambda outputs: outputs,
+      #   sample_shape=[271],
+      #   sample_dtype=tf.float32,
+      #   end_fn=lambda sample_ids: False)
+      #
+      # inference_sampler.initialize(start_inputs=start_tokens)
+      # inference_decoder = tfa.seq2seq.BasicDecoder(dec_cell, sampler=inference_sampler)
+
+      # Beam
+      # beam_width = 3
+      # inference_decoder = tfa.seq2seq.BeamSearchDecoder(dec_cell, beam_width=beam_width, embedding_fn=None)
+      #
+      # tiled_encoder_outputs = tfa.seq2seq.tile_batch(lstm_outputs, multiplier=beam_width)
+      # tiled_encoder_final_state = tfa.seq2seq.tile_batch(lstm_states, multiplier=beam_width)
+      #
+      # decoder_init_input = tf.fill((100, tf.shape(targetTensor)[-1] + tf.shape(lstm_states[-1].h)[-1]), 0.0)
+      # final_outputs, final_state, _ = inference_decoder(targetTensor, start_tokens=start_tokens, end_token=-2, initial_state=tiled_encoder_final_state)
+
+      # final_outputs, final_state, _ = tfa.seq2seq.dynamic_decode(decoder=inference_decoder, output_time_major=True, decoder_init_input=tiled_encoder_outputs, maximum_iterations=1,
+      #                                                          decoder_init_kwargs={"initial_state": tiled_encoder_final_state, "start_tokens": start_tokens, "end_token":-2})
 
     if ARGS.state == "cell":
       return final_state[-1].c #lstm_states has shape (c, h) where c are the cell states and h the hidden states
     elif ARGS.state == "hidden":
       return final_state[-1].h #lstm_states has shape (c, h) where c are the cell states and h the hidden states
-
-# def EncoderDecoderLuong_layer(inputTensor, seqLen):
-#   # Encoder
-#   with tf.variable_scope('encoder_cell'):
-#     lstms = [tf.nn.rnn_cell.LSTMCell(size, state_is_tuple=True, initializer=tf.keras.initializers.glorot_normal()) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-#     lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
-#     cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
-#     lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
-#
-#   with tf.variable_scope('decoder_cell'):
-#     # Decoder
-#     lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=False) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-#     lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
-#     cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
-#     lstm_dec_outputs, lstm_dec_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, initial_state=lstm_states, dtype=tf.float32)
-#
-#     # Luong Attention
-#     # Dot
-#     # score = tf.matmul(lstm_outputs, tf.transpose(lstm_dec_outputs, [0, 2, 1]))
-#     # attention_weights = tf.nn.softmax(score, axis=0)
-#     # context_vector = tf.matmul(attention_weights, lstm_outputs)
-#     # output = tf.concat([lstm_dec_outputs, context_vector], axis=-1)
-#
-#     # General
-#     # W = tf.keras.layers.Dense(lstm_dec_outputs.shape[-1], use_bias=False)(lstm_dec_outputs)
-#     # score = tf.matmul(lstm_outputs, tf.transpose(W, [0, 2, 1]))
-#     # attention_weights = tf.nn.softmax(score, axis=0)
-#     # context_vector = tf.matmul(attention_weights, lstm_outputs)
-#     # output = tf.concat([lstm_dec_outputs, context_vector], axis=-1)
-#
-#     # Dot with states
-#     score = tf.matmul(lstm_states[-1].c, tf.transpose(lstm_dec_states[-1].c))
-#     attention_weights = tf.nn.softmax(score, axis=0)
-#     context_vector = tf.matmul(attention_weights, lstm_states[-1].c)
-#     output = tf.concat([lstm_dec_states[-1].c, context_vector], axis=-1)
-#
-#     # General with states
-#     # W = tf.keras.layers.Dense(lstm_dec_states[-1].c.shape[-1], use_bias=False)(lstm_dec_states[-1].c)
-#     # score = tf.matmul(lstm_states[-1].c, tf.transpose(W))
-#     # attention_weights = tf.nn.softmax(score, axis=0)
-#     # context_vector = tf.matmul(attention_weights, lstm_states[-1].c)
-#     # output = tf.concat([lstm_dec_states[-1].c, context_vector], axis=-1)
-#
-#     return output
 
 def FC_layer(inputTensor):
   im_dim = inputTensor.get_shape()[-1]
@@ -290,9 +288,12 @@ def train_model():
         xf, yf, maskf, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
         xf += np.random.normal(0, 0.1, xf.shape)
 
-        # start_token = np.full((xf.shape[0], xf.shape[1], 1), 100)
-        # # xf = np.concatenate([start_token, xf], axis=-1)
+        # ending = tf.strided_slice(yf, [0, 0], [yf.shape[1], -1], [1, 1])
+        # print(ending.shape)
+
+        # start_token = np.full((yf.shape[0], yf.shape[1], 1), 100)
         # yf = np.concatenate([start_token, yf], axis=-1)
+        # # xf = np.concatenate([start_token, xf], axis=-1)
         #
         # end_token = np.full((yf.shape[0], yf.shape[1], 1), 200)
         # yf = np.concatenate([yf, end_token], axis=-1)
@@ -347,7 +348,7 @@ def parse_arguments():
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .train and .test files) with pickled data organized as patient x admission x codes.')
   parser.add_argument('outFile', metavar='out_file', default='model_output', help='Any file directory to store the model.')
   parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=10, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
-  parser.add_argument('--hiddenDimSize', type=str, default='[1084]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
+  parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
   parser.add_argument('--state', type=str, default='cell', help='Pass cell or hidden to fully connected layer')
   # parser.add_argument('--attentionDimSize', type=int, default=3, help='Number of attention layer dense units')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')

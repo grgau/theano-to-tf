@@ -9,22 +9,26 @@ from sklearn import metrics
 global ARGS
 tf.disable_v2_behavior()
 
-def prepareHotVectors(test_tensor):
+def prepareHotVectors(test_tensor, labels_tensor):
   n_visits_of_each_patientList = np.array([len(seq) for seq in test_tensor]) - 1
   number_of_patients = len(test_tensor)
   max_number_of_visits = np.max(n_visits_of_each_patientList)
 
   x_hotvectors_tensorf = np.zeros((max_number_of_visits, number_of_patients, ARGS.numberOfInputCodes)).astype(np.float64)
+  y_hotvectors_tensor = np.zeros((max_number_of_visits, number_of_patients, ARGS.numberOfInputCodes)).astype(np.float64)
+
   mask = np.zeros((max_number_of_visits, number_of_patients)).astype(np.float64)
 
-  for idx, (train_patient_matrix) in enumerate(test_tensor):
-    for i_th_visit, visit_line in enumerate(train_patient_matrix[:-1]): #ignores the last visit, which is not part of the computation
+  for idx, (test_patient_matrix,label_patient_matrix) in enumerate(zip(test_tensor,labels_tensor)):
+    for i_th_visit, visit_line in enumerate(test_patient_matrix[:-1]): #ignores the last visit, which is not part of the computation
       for code in visit_line:
         x_hotvectors_tensorf[i_th_visit, idx, code] = 1
+    for i_th_visit, visit_line in enumerate(label_patient_matrix[1:]):  #label_matrix[1:] = all but the first admission slice, not used to evaluate (this is the answer)
+      for code in visit_line:
+        y_hotvectors_tensor[i_th_visit, idx, code] = 1
     mask[:n_visits_of_each_patientList[idx], idx] = 1.
 
-  x_hotvectors_tensorb = x_hotvectors_tensorf[::-1,::,::]
-  return x_hotvectors_tensorf, x_hotvectors_tensorb, mask, n_visits_of_each_patientList
+  return x_hotvectors_tensorf, y_hotvectors_tensor, mask, n_visits_of_each_patientList
 
 def loadModel():
   model_path = ARGS.modelPath
@@ -33,12 +37,16 @@ def loadModel():
   with tf.Session(graph=loaded_graph).as_default() as sess:
     tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], model_path)
     x = loaded_graph.get_tensor_by_name('inputs:0')
+    y = loaded_graph.get_tensor_by_name('labels:0')
     predictions = loaded_graph.get_tensor_by_name('predictions:0')
     mask = loaded_graph.get_tensor_by_name('mask:0')
     seqLen = loaded_graph.get_tensor_by_name('nVisitsOfEachPatient_List:0')
 
     ARGS.numberOfInputCodes = x.get_shape()[-1]
-    return sess, predictions, x, mask, seqLen
+    return sess, predictions, x, y, mask, seqLen
+
+def load_patients():
+  return np.array(pickle.load(open(ARGS.inputFileRadical+'.map.test', 'rb')))
 
 
 def load_data():
@@ -57,16 +65,21 @@ def load_data():
 
 def testModel():
   print('==> model loading')
-  session, predictions, x, mask, seqLen = loadModel()
+  session, predictions, x, y, mask, seqLen = loadModel()
 
   print('==> data loading')
   testSet = load_data()
+
+  print ('==> load patients')
+  patientsSet = load_patients()
+  # patientsSet = None
 
   print('==> model execution')
   nBatches = int(np.ceil(float(len(testSet[0])) / float(ARGS.batchSize)))
   predictedY_list = []
   predictedProbabilities_list = []
   actualY_list = []
+  predicted_yList = []
 
   file = open(ARGS.inputFileRadical + 'AUCROC.input.txt', 'w')
 
@@ -74,11 +87,12 @@ def testModel():
     for batchIndex in range(nBatches):
       batchX = testSet[0][batchIndex * ARGS.batchSize: (batchIndex + 1) * ARGS.batchSize]
       batchY = testSet[1][batchIndex * ARGS.batchSize: (batchIndex + 1) * ARGS.batchSize]
-      xf, xb, maskf, nVisitsOfEachPatient_List = prepareHotVectors(batchX)
+      xf, yf, maskf, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
       # retrieve the maximum number of admissions considering all the patients
       maxNumberOfAdmissions = np.max(nVisitsOfEachPatient_List)
       # make prediction
-      predicted_y = sess.run(predictions, feed_dict={x: xf, mask: maskf, seqLen: nVisitsOfEachPatient_List})
+      predicted_y = sess.run(predictions, feed_dict={x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List})
+      predicted_yList.append(predicted_y.tolist()[-1])
 
       # traverse the predicted results, once for each patient in the batch
       for ith_patient in range(predicted_y.shape[1]):
@@ -222,6 +236,7 @@ def testModel():
     print('Binary F1 Score: ' + str(PRResults[2]))  # FBeta score with beta = 1.0
     print('Support: ' + str(PRResults[3]))
   sess.close()
+  return patientsSet, predicted_yList
 
 
 def parse_arguments():
@@ -232,10 +247,18 @@ def parse_arguments():
   ARGStemp = parser.parse_args()
   return ARGStemp
 
+import csv
+from itertools import count
 
 if __name__ == '__main__':
   global ARGS
   ARGS = parse_arguments()
   print(ARGS)
 
-  testModel()
+  patients, predictions = testModel()
+
+  with open("855_codes_prediction.csv", "wb") as f:
+    writer = csv.writer(f)
+    for idx, batch in zip(count(step=ARGS.batchSize), predictions):
+  #     writer.writerows(np.array(batch).tolist())
+      writer.writerows(np.column_stack((patients[idx:idx+len(batch)], np.array(batch))).tolist())
