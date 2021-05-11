@@ -29,9 +29,8 @@ class DT_LSTMCell(tf.nn.rnn_cell.BasicLSTMCell): # Based on Tensorflow's BasicLS
     if transition_activation:
       self._transition_activation = activations.get(activation)
     else:
-      # self._transition_activation = tf.nn.relu
-      self._transition_activation = math_ops.tanh
-      # self._transition_activation = math_ops.sigmoid
+      self._transition_activation = tf.nn.relu
+      # self._transition_activation = math_ops.tanh
 
   @property
   def state_size(self):
@@ -96,15 +95,13 @@ class DT_LSTMCell(tf.nn.rnn_cell.BasicLSTMCell): # Based on Tensorflow's BasicLS
       i, j, f, o = array_ops.split(value=gate_inputs, num_or_size_splits=4, axis=one)
       forget_bias_tensor = constant_op.constant(self._forget_bias, dtype=f.dtype)
 
-      i = sigmoid(i)
-      j = self._transition_activation(j)
-      f = sigmoid(add(f, forget_bias_tensor))
-      o = sigmoid(o)
+      # i = sigmoid(i)
+      # j = self._transition_activation(j)
+      # f = sigmoid(add(f, forget_bias_tensor))
+      # o = sigmoid(o)
 
-      add = math_ops.add
-      multiply = math_ops.multiply
-      new_c = self._transition_activation(add(multiply(new_c, f), multiply(i, j)))
-      new_h = multiply(new_c, o)
+      new_c = self._transition_activation(add(multiply(new_c, sigmoid(add(f, forget_bias_tensor))), multiply(sigmoid(i), self._transition_activation(j))))
+      new_h = multiply(new_c, sigmoid(o))
 
       # new_h = math_ops.matmul(new_h, self._kernel[i])
       # new_h = nn_ops.bias_add(new_h, self._bias[i])

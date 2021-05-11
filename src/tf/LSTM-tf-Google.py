@@ -97,7 +97,7 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
 def DTLSTM_layer(inputTensor, seqLen):
   # lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=True) for size in ARGS.hiddenDimSize]
   lstms = [DT_LSTMCell(size, dtype=tf.float32, state_is_tuple=True) for size in [ARGS.hiddenDimSize]]
-  lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate, seed=13713) for lstm in lstms]
+  lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=1-ARGS.dropoutRate, seed=13713) for lstm in lstms]
   cell = tf.nn.rnn_cell.MultiRNNCell(lstms, state_is_tuple=True)
   lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
 
@@ -139,7 +139,7 @@ def build_model():
     prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
     L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
 
-    optimizer = tf.train.AdadeltaOptimizer(learning_rate=0.5, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+    optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.LearningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
 
     # global_step = tf.Variable(0, trainable=False)
     # learning_rate = tf.train.exponential_decay(1.0, global_step, 100, 0.87)
@@ -233,11 +233,12 @@ def parse_arguments():
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .train and .test files) with pickled data organized as patient x admission x codes.')
   parser.add_argument('outFile', metavar='out_file', default='model_output', help='Any file directory to store the model.')
   parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=10, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
-  parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
+  parser.add_argument('--hiddenDimSize', type=str, default='[542, 542]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
   parser.add_argument('--state', type=str, default='cell', help='Pass cell or hidden to fully connected layer')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
+  parser.add_argument('--LearningRate', type=float, default=0.5, help='Learning Rate')
   parser.add_argument('--dropoutRate', type=float, default=0.45, help='Dropout probability.')
 
   ARGStemp = parser.parse_args()
