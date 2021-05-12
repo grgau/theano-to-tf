@@ -4,10 +4,7 @@ import shutil
 import os
 import random
 
-import tensorflow.compat.v1 as tf
-import tensorflow_addons as tfa
-
-tf.disable_v2_behavior()
+import tensorflow as tf
 import numpy as np
 
 global ARGS
@@ -101,7 +98,7 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
       #At the end, it returns the mean cross entropy considering all the batches
   return n_batches, crossEntropySum / dataCount
 
-def EncoderDecoderBahdanau_layer(inputTensor, targetTensor, vocab, seqLen):
+def EncoderDecoderBahdanau_layer(inputTensor, targetTensor, vocab, seqLen, tgtSeqLen):
   # Encoder
   with tf.variable_scope('encoder_cell'):
     lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
@@ -132,16 +129,15 @@ def EncoderDecoderBahdanau_layer(inputTensor, targetTensor, vocab, seqLen):
     lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
     dec_cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
 
-    sampler = tfa.seq2seq.sampler.TrainingSampler(time_major=True)
-    decoder = tfa.seq2seq.BasicDecoder(dec_cell, sampler=sampler)
-
     go_token = -1.
     go_tokens = tf.fill((1, tf.shape(targetTensor)[1], ARGS.numberOfInputCodes), go_token)
     dec_input = tf.concat([go_tokens, targetTensor], axis=0)
 
+    helper = tf.contrib.seq2seq.TrainingHelper(inputs=dec_input, sequence_length=tgtSeqLen,time_major=True)
+    decoder = tf.contrib.seq2seq.BasicDecoder(cell=dec_cell, helper=helper, initial_state=lstm_states)
+
     # maximum_iterations=41
-    final_outputs, final_state, _ = tfa.seq2seq.dynamic_decode(decoder=decoder, output_time_major=True, decoder_init_input=dec_input,
-                                                               decoder_init_kwargs={"initial_state": lstm_states, "sequence_length":seqLen})
+    final_outputs, final_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=decoder, impute_finished=False, maximum_iterations=1)
 
     # with tf.variable_scope('decoder_cell', reuse=True):
     #   start_tokens = tf.fill((tf.shape(targetTensor)[1], 1), go_token)
@@ -230,8 +226,9 @@ def build_model():
     df = tf.placeholder(tf.float32, [ARGS.numberOfInputCodes, ARGS.hiddenDimSize[-1]], name="vocab_size")
     maskf = tf.placeholder(tf.float32, [None, None], name="mask")
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
+    tgtSeqLen = tf.fill([tf.shape(yf)[0]], 1)
 
-    flowingTensor = EncoderDecoderBahdanau_layer(xf, yf, df, seqLen)
+    flowingTensor = EncoderDecoderBahdanau_layer(xf, yf, df, seqLen, tgtSeqLen)
     flowingTensor, weights = FC_layer(flowingTensor)
     flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
 
