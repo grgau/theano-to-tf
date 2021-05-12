@@ -28,6 +28,11 @@ def prepareHotVectors(test_tensor, labels_tensor):
         y_hotvectors_tensor[i_th_visit, idx, code] = 1
     mask[:n_visits_of_each_patientList[idx], idx] = 1.
 
+  n_visits_of_each_patientList = np.array(n_visits_of_each_patientList, dtype=np.int32)
+  x_hotvectors_tensorf = np.reshape(x_hotvectors_tensorf, (-1, x_hotvectors_tensorf.shape[-1]))
+  y_hotvectors_tensor = np.reshape(y_hotvectors_tensor, (-1, y_hotvectors_tensor.shape[-1]))
+  mask = np.reshape(mask, (-1))
+
   return x_hotvectors_tensorf, y_hotvectors_tensor, mask, n_visits_of_each_patientList
 
 def loadModel():
@@ -42,7 +47,10 @@ def loadModel():
     mask = loaded_graph.get_tensor_by_name('mask:0')
     seqLen = loaded_graph.get_tensor_by_name('nVisitsOfEachPatient_List:0')
 
-    ARGS.numberOfInputCodes = x.get_shape()[-1]
+    # ARGS.numberOfInputCodes = x.get_shape()[-1]
+    ARGS.numberOfInputCodes = 851
+
+    print(ARGS.numberOfInputCodes)
     return sess, predictions, x, y, mask, seqLen
 
 def load_patients():
@@ -71,8 +79,8 @@ def testModel():
   testSet = load_data()
 
   print ('==> load patients')
-  patientsSet = load_patients()
-  # patientsSet = None
+  # patientsSet = load_patients()
+  patientsSet = None
 
   print('==> model execution')
   nBatches = int(np.ceil(float(len(testSet[0])) / float(ARGS.batchSize)))
