@@ -6,8 +6,12 @@ from sklearn import metrics
 
 import csv
 from itertools import count
+import wandb
 
 tf.contrib.resampler
+
+run = wandb.init(project="enc-dec", reinit=True)
+wandb.run.name = "MIMIC-855"
 
 global ARGS
 
@@ -237,6 +241,22 @@ def testModel():
     print('Recall: ' + str(PRResults[1]))
     print('Binary F1 Score: ' + str(PRResults[2]))  # FBeta score with beta = 1.0
     print('Support: ' + str(PRResults[3]))
+
+
+    wandb.log({ 'Recall@10': str(finalRecalls[0]),
+                'Recall@20': str(finalRecalls[1]),
+                'Recall@30': str(finalRecalls[2]),
+                'Precision@1': str(finalPrecisions[0]),
+                'Precision@2': str(finalPrecisions[1]),
+                'Precision@3': str(finalPrecisions[2]),
+                'AUC-ROC': str(metrics.roc_auc_score(fullListOfTrueYOutcomeForAUCROCAndPR_list,
+                                                                 fullListOfPredictedYProbsForAUCROC_list,
+                                                                 average='weighted')),
+                'Precision': str(PRResults[0]),
+                'Recall': str(PRResults[1]),
+                'F1 Score': str(PRResults[2])
+                'Suport': str(PRResults[3])})
+    run.finish()
   sess.close()
   return patientsSet, predicted_yList
 
