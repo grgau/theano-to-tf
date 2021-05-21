@@ -125,9 +125,9 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
   end_token = 2.
 
   go_tokens = tf.fill((1, tf.shape(targetTensor)[1], ARGS.numberOfInputCodes), go_token)
-  # end_tokens = tf.fill((tf.shape(targetTensor)[0], tf.shape(targetTensor)[1], 1), end_token)
+  end_tokens = tf.fill((1, tf.shape(targetTensor)[1], ARGS.numberOfInputCodes), end_token)
   dec_input = tf.concat([go_tokens, targetTensor], axis=0)
-  # dec_input = tf.concat([dec_input, end_tokens], axis=-1)
+  dec_input = tf.concat([dec_input, end_tokens], axis=1)
   # dec_input = tf.concat([tf.strided_slice(dec_input, begin=[-1, 0, 0], end=[-1, tf.shape(dec_input)[1], ARGS.numberOfInputCodes], strides=[1,1,1]), end_tokens], axis=-1)
 
   with tf.variable_scope('decoder'):
@@ -154,7 +154,7 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
     go_token = tf.cast(go_token, dtype=tf.int32)
     end_token = tf.cast(end_token, dtype=tf.int32)
 
-    test_decoder = tf.contrib.seq2seq.BeamSearchDecoder(
+    inference_decoder = tf.contrib.seq2seq.BeamSearchDecoder(
       cell=dec_cell,
       embedding=tf.Variable(tf.zeros([ARGS.hiddenDimSize[-1], ARGS.numberOfInputCodes])),
       start_tokens=tf.ones_like(seqLen) * go_token,
@@ -162,31 +162,33 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
       initial_state=init_state,
       beam_width=ARGS.beamWidth)
 
-    testing_outputs, testing_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=test_decoder, output_time_major=True, maximum_iterations=1)
+    inference_outputs, inference_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=inference_decoder, output_time_major=True, maximum_iterations=1)
 
   if ARGS.state == "cell":
-    testing_outputs = tf.transpose(testing_state.cell_state.cell_state[-1].c, [1,0,2])
+    inference_outputs = tf.transpose(inference_state.cell_state.cell_state[-1].c, [1,0,2])
   elif ARGS.state == "hidden":
-    testing_outputs = tf.transpose(testing_state.cell_state.cell_state[-1].h, [1,0,2])
+    inference_outputs = tf.transpose(inference_state.cell_state.cell_state[-1].h, [1,0,2])
   elif ARGS.state == "attention":
-    testing_outputs = tf.transpose(testing_state.cell_state.attention, [1,0,2])
+    inference_outputs = tf.transpose(inference_state.cell_state.attention, [1,0,2])
+  else:
+    inference_outputs = tf.cast(inference_outputs.predicted_ids, tf.float32)
 
-  return testing_outputs
+  return inference_outputs
+
 
 def FC_layer(inputTensor):
   im_dim = inputTensor.get_shape()[-1]
   weights = tf.get_variable(name='weights',
-                           shape=[im_dim, ARGS.numberOfInputCodes],
-                           dtype=tf.float32,
-                           initializer=tf.keras.initializers.glorot_normal())
+                               shape=[im_dim, ARGS.numberOfInputCodes],
+                               dtype=tf.float32,
+                               initializer=tf.keras.initializers.glorot_normal())
 
   bias = tf.get_variable(name='bias',
-                       shape=[ARGS.numberOfInputCodes],
-                       dtype=tf.float32,
-                       initializer=tf.zeros_initializer())
+                           shape=[ARGS.numberOfInputCodes],
+                           dtype=tf.float32,
+                           initializer=tf.zeros_initializer())
   output = tf.nn.softmax(tf.nn.leaky_relu(tf.add(tf.matmul(inputTensor, weights), bias)))
-  return output, weights
-
+  return output, weights, bias
 
 def build_model():
   graph = tf.Graph()
@@ -197,7 +199,7 @@ def build_model():
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
 
     flowingTensor = EncoderDecoderAttention_layer(xf, yf, seqLen)
-    flowingTensor, weights = FC_layer(flowingTensor)
+    flowingTensor, weights, bias = FC_layer(flowingTensor)
     flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
 
     epislon = 1e-8
