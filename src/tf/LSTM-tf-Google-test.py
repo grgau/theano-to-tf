@@ -7,6 +7,8 @@ from sklearn import metrics
 import csv
 from itertools import count
 
+tf.contrib.resampler
+
 global ARGS
 
 def prepareHotVectors(test_tensor, labels_tensor):
