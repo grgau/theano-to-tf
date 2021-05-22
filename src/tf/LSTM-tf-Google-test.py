@@ -254,7 +254,7 @@ def testModel():
                                                                  average='weighted')),
                 'Precision': str(PRResults[0]),
                 'Recall': str(PRResults[1]),
-                'F1 Score': str(PRResults[2])
+                'F1 Score': str(PRResults[2]),
                 'Suport': str(PRResults[3])})
     run.finish()
   sess.close()
