@@ -11,7 +11,7 @@ import wandb
 tf.contrib.resampler
 
 run = wandb.init(project="enc-dec", reinit=True)
-wandb.run.name = "MIMIC-855"
+wandb.run.name = "MIMIC-855_" + ARGS.hiddenDimSize
 
 global ARGS
 
@@ -255,7 +255,8 @@ def testModel():
                 'Precision': str(PRResults[0]),
                 'Recall': str(PRResults[1]),
                 'F1 Score': str(PRResults[2]),
-                'Suport': str(PRResults[3])})
+                'Suport': str(PRResults[3]),
+                '_hiddenDimSize': str(ARGS.hiddenDimSize)})
     run.finish()
   sess.close()
   return patientsSet, predicted_yList
@@ -266,6 +267,7 @@ def parse_arguments():
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .test file) with pickled data organized as patient x admission x codes.')
   parser.add_argument('modelPath', type=str, metavar='<model_path>', help='The path to the model directory')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
+  parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Hidden dimension sizes (only for saving on wandb')
   ARGStemp = parser.parse_args()
   return ARGStemp
 
