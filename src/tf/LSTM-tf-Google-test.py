@@ -13,7 +13,6 @@ tf.contrib.resampler
 global ARGS
 
 run = wandb.init(project="enc-dec", reinit=True)
-wandb.run.name = "MIMIC-855_" + ARGS.hiddenDimSize
 
 def prepareHotVectors(test_tensor, labels_tensor):
   n_visits_of_each_patientList = np.array([len(seq) for seq in test_tensor]) - 1
@@ -275,6 +274,7 @@ if __name__ == '__main__':
   global ARGS
   ARGS = parse_arguments()
   print(ARGS)
+  wandb.run.name = "MIMIC-855_" + ARGS.hiddenDimSize
 
   patients, predictions = testModel()
 
