@@ -274,7 +274,7 @@ if __name__ == '__main__':
   global ARGS
   ARGS = parse_arguments()
   print(ARGS)
-  wandb.run.name = "MIMIC-855_" + ARGS.hiddenDimSize
+  wandb.run.name = "MIMIC-272_" + ARGS.hiddenDimSize
 
   patients, predictions = testModel()
 
