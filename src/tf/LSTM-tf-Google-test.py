@@ -2,12 +2,14 @@ import pickle
 import argparse
 import os
 import random
-import tensorflow.compat.v1 as tf
+import tensorflow as tf
 import numpy as np
 from sklearn import metrics
+import wandb
 
 global ARGS
-tf.disable_v2_behavior()
+
+run = wandb.init(project="dt-lstm", reinit=True)
 
 def prepareHotVectors(test_tensor, labels_tensor):
   n_visits_of_each_patientList = np.array([len(seq) for seq in test_tensor]) - 1
@@ -231,6 +233,22 @@ def testModel():
     print('Recall: ' + str(PRResults[1]))
     print('Binary F1 Score: ' + str(PRResults[2]))  # FBeta score with beta = 1.0
     print('Support: ' + str(PRResults[3]))
+
+    wandb.log({ 'Recall@10': str(finalRecalls[0]),
+                'Recall@20': str(finalRecalls[1]),
+                'Recall@30': str(finalRecalls[2]),
+                'Precision@1': str(finalPrecisions[0]),
+                'Precision@2': str(finalPrecisions[1]),
+                'Precision@3': str(finalPrecisions[2]),
+                'AUC-ROC': str(metrics.roc_auc_score(fullListOfTrueYOutcomeForAUCROCAndPR_list,
+                                                                 fullListOfPredictedYProbsForAUCROC_list,
+                                                                 average='weighted')),
+                'Precision': str(PRResults[0]),
+                'Recall': str(PRResults[1]),
+                'F1 Score': str(PRResults[2]),
+                'Suport': str(PRResults[3]),
+                '_hiddenDimSize': str(ARGS.hiddenDimSize)})
+    run.finish()
   sess.close()
   # return patientsSet, predicted_yList
   return predicted_yList
@@ -241,6 +259,7 @@ def parse_arguments():
   parser.add_argument('modelPath', type=str, metavar='<model_path>', help='The path to the model directory')
   parser.add_argument('--hiddenDimSize', type=str, default='[542, 542]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
+  parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Hidden dimension sizes (only for saving on wandb')
   ARGStemp = parser.parse_args()
   hiddenDimSize = [int(strDim) for strDim in ARGStemp.hiddenDimSize[1:-1].split(',')]
   ARGStemp.hiddenDimSize = hiddenDimSize
