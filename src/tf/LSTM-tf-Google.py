@@ -181,12 +181,12 @@ def FC_layer(inputTensor):
 def build_model():
   graph = tf.Graph()
   with graph.as_default():
-    with tf.device('/gpu:0'):
-      xf = tf.placeholder(tf.float32, [None, None, ARGS.numberOfInputCodes], name="inputs")
-      yf = tf.placeholder(tf.float32, [None, None, ARGS.numberOfInputCodes], name="labels")
-      maskf = tf.placeholder(tf.float32, [None, None], name="mask")
-      seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
+    xf = tf.placeholder(tf.float32, [None, None, ARGS.numberOfInputCodes], name="inputs")
+    yf = tf.placeholder(tf.float32, [None, None, ARGS.numberOfInputCodes], name="labels")
+    maskf = tf.placeholder(tf.float32, [None, None], name="mask")
+    seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
 
+    with tf.device('/gpu:0'):
       flowingTensor = EncoderDecoderAttention_layer(xf, yf, seqLen)
       flowingTensor, weights, bias = FC_layer(flowingTensor)
       flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
@@ -213,7 +213,7 @@ def build_model():
       # learning_rate = tf.train.exponential_decay(1.0, global_step, 100, 0.9)
       # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
 
-      return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
+    return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
 def train_model():
   print("==> data loading")
