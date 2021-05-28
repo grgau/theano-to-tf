@@ -234,7 +234,7 @@ def train_model():
   iConsecutiveNonImprovements = 0
   epoch_counter = 0
 
-  with tf.Session(graph=graph, config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=True)) as sess:
+  with tf.Session(graph=graph, config=tf.ConfigProto(allow_soft_placement=True)) as sess:
     sess.run(init)
 
     for epoch_counter in range(ARGS.nEpochs):
