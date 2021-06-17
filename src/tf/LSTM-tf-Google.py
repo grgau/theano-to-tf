@@ -196,12 +196,13 @@ def build_model():
       prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
       L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
 
-      optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+      # optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
 
       # Bahdanau (855)
-      # global_step = tf.Variable(0, trainable=False)
-      # learning_rate = tf.train.exponential_decay(1.0, global_step, 1000, 0.68)
-      # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
+      global_step = tf.Variable(0, trainable=False)
+      learning_rate = tf.train.exponential_decay(ARGS.learningRate, global_step, ARGS.decaySteps, ARGS.decayRate, staircase=True)
+      trainer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06)
+      optimizer = trainer.minimize(L2_regularized_loss, global_step=global_step)
 
       # Bahdanau (271)
       # global_step = tf.Variable(0, trainable=False)
@@ -213,14 +214,14 @@ def build_model():
       # learning_rate = tf.train.exponential_decay(1.0, global_step, 100, 0.9)
       # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
 
-    return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
+    return tf.global_variables_initializer(), graph, optimizer, trainer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
 def train_model():
   print("==> data loading")
   trainSet, testSet = load_data()
 
   print("==> model building")
-  init, graph, optimizer, loss, x, y, mask, seqLen, predictions = build_model()
+  init, graph, optimizer, trainer, loss, x, y, mask, seqLen, predictions = build_model()
 
   print ("==> training and validation")
   batchSize = ARGS.batchSize
@@ -262,7 +263,7 @@ def train_model():
         trainCrossEntropyVector.append(trainCrossEntropy)
         iteration += 1
 
-      print('-> Epoch: %d, mean cross entropy considering %d TRAINING batches: %f' % (epoch_counter, n_batches, np.mean(trainCrossEntropyVector)))
+      print('-> Epoch: %d, mean cross entropy considering %d TRAINING batches: %f / LR: %f' % (epoch_counter, n_batches, np.mean(trainCrossEntropyVector), sess.run(trainer._lr)))
       nValidBatches, validationCrossEntropy = performEvaluation(sess, loss, x, y, mask, seqLen, testSet)
       print('      mean cross entropy considering %d VALIDATION batches: %f' % (nValidBatches, validationCrossEntropy))
 
@@ -314,6 +315,8 @@ def parse_arguments():
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
   parser.add_argument('--learningRate', type=float, default=0.5, help='Learning rate.')
+  parser.add_argument('--decaySteps', type=float, default=1000, help='Decay Steps.')
+  parser.add_argument('--decayRate', type=float, default=0.9, help='Decay Rate.')
   parser.add_argument('--dropoutRate', type=float, default=0.45, help='Dropout probability.')
 
   ARGStemp = parser.parse_args()
