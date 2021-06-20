@@ -98,7 +98,13 @@ def LSTMGoogle_layer(inputTensor, seqLen):
   drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
   cell = tf.nn.rnn_cell.MultiRNNCell(drops)
   lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
-  return lstm_states[-1].c #lstm_states has shape (c, h) where c are the cell states and h the hidden states
+
+  if ARGS.state == "cell":
+    return lstm_states[-1].c  # lstm_states has shape (c, h) where c are the cell states and h the hidden states
+  elif ARGS.state == "hidden":
+    return lstm_states[-1].h  # lstm_states has shape (c, h) where c are the cell states and h the hidden states
+  else:
+    return lstm_outputs
 
 def FC_layer(inputTensor):
   im_dim = inputTensor.get_shape()[-1]
@@ -123,16 +129,17 @@ def build_model():
     maskf = tf.placeholder(tf.float32, [None, None], name="mask")
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
 
-    flowingTensor = LSTMGoogle_layer(xf, seqLen)
-    flowingTensor, weights = FC_layer(flowingTensor)
-    flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
+    with tf.device('/gpu:0'):
+      flowingTensor = LSTMGoogle_layer(xf, seqLen)
+      flowingTensor, weights = FC_layer(flowingTensor)
+      flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
 
-    epislon = 1e-8
-    cross_entropy = -(yf * tf.log(flowingTensor + epislon) + (1. - yf) * tf.log(1. - flowingTensor + epislon))
-    prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
-    L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
+      epislon = 1e-8
+      cross_entropy = -(yf * tf.log(flowingTensor + epislon) + (1. - yf) * tf.log(1. - flowingTensor + epislon))
+      prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
+      L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
 
-    optimizer = tf.train.AdadeltaOptimizer(learning_rate=1.0, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+      optimizer = tf.train.AdadeltaOptimizer(learning_rate=1.0, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
     return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
 def train_model():
@@ -154,7 +161,7 @@ def train_model():
   iConsecutiveNonImprovements = 0
   epoch_counter = 0
 
-  with tf.Session(graph=graph) as sess:
+  with tf.Session(graph=graph, config=tf.ConfigProto(allow_soft_placement=True)) as sess:
     sess.run(init)
 
     for epoch_counter in range(ARGS.nEpochs):
@@ -217,6 +224,7 @@ def parse_arguments():
   parser.add_argument('outFile', metavar='out_file', default='model_output', help='Any file directory to store the model.')
   parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=5, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
   parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
+  parser.add_argument('--state', type=str, default='cell', help='Pass cell, hidden or attention to fully connected layer')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')

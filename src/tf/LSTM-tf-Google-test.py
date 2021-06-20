@@ -30,7 +30,7 @@ def loadModel():
   model_path = ARGS.modelPath
 
   loaded_graph = tf.Graph()
-  with tf.Session(graph=loaded_graph).as_default() as sess:
+  with tf.Session(graph=loaded_graph, config=tf.ConfigProto(allow_soft_placement=True)).as_default() as sess:
     tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], model_path)
     x = loaded_graph.get_tensor_by_name('inputs:0')
     predictions = loaded_graph.get_tensor_by_name('predictions:0')
