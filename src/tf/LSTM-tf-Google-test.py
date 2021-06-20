@@ -2,12 +2,11 @@ import pickle
 import argparse
 import os
 import random
-import tensorflow.compat.v1 as tf
+import tensorflow as tf
 import numpy as np
 from sklearn import metrics
 
 global ARGS
-tf.disable_v2_behavior()
 
 def prepareHotVectors(test_tensor):
   n_visits_of_each_patientList = np.array([len(seq) for seq in test_tensor]) - 1

@@ -4,8 +4,7 @@ import shutil
 import os
 import random
 
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
+import tensorflow as tf
 import numpy as np
 
 global ARGS
