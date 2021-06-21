@@ -101,9 +101,11 @@ def DTLSTM_layer(inputTensor, seqLen):
   lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
 
   if ARGS.state == "cell":
-    return lstm_states[-1].c #lstm_states has shape (c, h) where c are the cell states and h the hidden states
+    return lstm_states[-1].c  # lstm_states has shape (c, h) where c are the cell states and h the hidden states
   elif ARGS.state == "hidden":
-    return lstm_states[-1].h #lstm_states has shape (c, h) where c are the cell states and h the hidden states
+    return lstm_states[-1].h  # lstm_states has shape (c, h) where c are the cell states and h the hidden states
+  else:
+    return lstm_outputs
 
 def FC_layer(inputTensor):
   im_dim = inputTensor.get_shape()[-1]
