@@ -259,7 +259,6 @@ def parse_arguments():
   parser.add_argument('modelPath', type=str, metavar='<model_path>', help='The path to the model directory')
   parser.add_argument('--hiddenDimSize', type=str, default='[542, 542]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
-  parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Hidden dimension sizes (only for saving on wandb')
   ARGStemp = parser.parse_args()
   hiddenDimSize = [int(strDim) for strDim in ARGStemp.hiddenDimSize[1:-1].split(',')]
   ARGStemp.hiddenDimSize = hiddenDimSize
