@@ -271,6 +271,7 @@ def parse_arguments():
   parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Hidden dimension sizes (only for saving on wandb')
   parser.add_argument('--learningRate', type=float, default=0.5, help='Learning rate.')
   parser.add_argument('--dropoutRate', type=float, default=0.45, help='Dropout probability.')
+  parser.add_argument('--runName', type=float, default="MIMIC_", help='WandB run name.')
 
   ARGStemp = parser.parse_args()
   return ARGStemp
@@ -279,7 +280,7 @@ if __name__ == '__main__':
   global ARGS
   ARGS = parse_arguments()
   print(ARGS)
-  wandb.run.name = "NEW_INCOR_" + ARGS.hiddenDimSize
+  wandb.run.name = ARGS.runName + ARGS.hiddenDimSize
 
   patients, predictions = testModel()
 
