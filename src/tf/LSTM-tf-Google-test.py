@@ -247,7 +247,9 @@ def testModel():
                 'Recall': str(PRResults[1]),
                 'F1 Score': str(PRResults[2]),
                 'Suport': str(PRResults[3]),
-                '_hiddenDimSize': str(ARGS.hiddenDimSize)})
+                '_hiddenDimSize': str(ARGS.hiddenDimSize),
+                '_LR': str(ARGS.learningRate),
+                '_dropoutRate': str(ARGS.dropoutRate)})
     run.finish()
   sess.close()
   # return patientsSet, predicted_yList
@@ -257,9 +259,13 @@ def parse_arguments():
   parser = argparse.ArgumentParser()
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .test file) with pickled data organized as patient x admission x codes.')
   parser.add_argument('modelPath', type=str, metavar='<model_path>', help='The path to the model directory')
-  parser.add_argument('--hiddenDimSize', type=str, default='[542, 542]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
+  parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Hidden dimension sizes (only for saving on wandb')
+  parser.add_argument('--learningRate', type=float, default=0.5, help='Learning rate.')
+  parser.add_argument('--dropoutRate', type=float, default=0.45, help='Dropout probability.')
+  parser.add_argument('--runName', type=str, default="MIMIC_", help='WandB run name.')
   ARGStemp = parser.parse_args()
+  ARGStemp.hiddenDimSizeStr = ARGStemp.hiddenDimSize
   hiddenDimSize = [int(strDim) for strDim in ARGStemp.hiddenDimSize[1:-1].split(',')]
   ARGStemp.hiddenDimSize = hiddenDimSize
   return ARGStemp
@@ -269,5 +275,7 @@ if __name__ == '__main__':
   global ARGS
   ARGS = parse_arguments()
   print(ARGS)
+
+  wandb.run.name = ARGS.runName + ARGS.hiddenDimSizeStr
 
   predictions = testModel()
