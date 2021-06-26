@@ -97,7 +97,7 @@ def GRU_layer(inputTensor, seqLen):
   cell = tf.nn.rnn_cell.MultiRNNCell(drops)
   gru_outputs, gru_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
 
-  return gru_states
+  return gru_states[-1]
 
 def FC_layer(inputTensor):
   im_dim = inputTensor.get_shape()[-1]

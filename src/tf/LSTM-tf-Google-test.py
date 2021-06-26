@@ -9,7 +9,7 @@ import wandb
 
 global ARGS
 
-run = wandb.init(project="lstm", reinit=True)
+run = wandb.init(project="gru", reinit=True)
 
 def prepareHotVectors(test_tensor):
   n_visits_of_each_patientList = np.array([len(seq) for seq in test_tensor]) - 1
