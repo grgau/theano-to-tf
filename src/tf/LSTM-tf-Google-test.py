@@ -9,7 +9,7 @@ import wandb
 
 global ARGS
 
-run = wandb.init(project="lstm", reinit=True)
+# run = wandb.init(project="attention-lstm", reinit=True)
 
 def prepareHotVectors(test_tensor):
   n_visits_of_each_patientList = np.array([len(seq) for seq in test_tensor]) - 1
@@ -224,23 +224,23 @@ def testModel():
     print('Binary F1 Score: ' + str(PRResults[2]))  # FBeta score with beta = 1.0
     print('Support: ' + str(PRResults[3]))
 
-    wandb.log({ 'Recall@10': str(finalRecalls[0]),
-                'Recall@20': str(finalRecalls[1]),
-                'Recall@30': str(finalRecalls[2]),
-                'Precision@1': str(finalPrecisions[0]),
-                'Precision@2': str(finalPrecisions[1]),
-                'Precision@3': str(finalPrecisions[2]),
-                'AUC-ROC': str(metrics.roc_auc_score(fullListOfTrueYOutcomeForAUCROCAndPR_list,
-                                                                 fullListOfPredictedYProbsForAUCROC_list,
-                                                                 average='weighted')),
-                'Precision': str(PRResults[0]),
-                'Recall': str(PRResults[1]),
-                'F1 Score': str(PRResults[2]),
-                'Suport': str(PRResults[3]),
-                '_hiddenDimSize': str(ARGS.hiddenDimSize),
-                '_LR': str(ARGS.learningRate),
-                '_dropoutRate': str(ARGS.dropoutRate)})
-    run.finish()
+    # wandb.log({ 'Recall@10': str(finalRecalls[0]),
+    #             'Recall@20': str(finalRecalls[1]),
+    #             'Recall@30': str(finalRecalls[2]),
+    #             'Precision@1': str(finalPrecisions[0]),
+    #             'Precision@2': str(finalPrecisions[1]),
+    #             'Precision@3': str(finalPrecisions[2]),
+    #             'AUC-ROC': str(metrics.roc_auc_score(fullListOfTrueYOutcomeForAUCROCAndPR_list,
+    #                                                              fullListOfPredictedYProbsForAUCROC_list,
+    #                                                              average='weighted')),
+    #             'Precision': str(PRResults[0]),
+    #             'Recall': str(PRResults[1]),
+    #             'F1 Score': str(PRResults[2]),
+    #             'Suport': str(PRResults[3]),
+    #             '_hiddenDimSize': str(ARGS.hiddenDimSize),
+    #             '_LR': str(ARGS.learningRate),
+    #             '_dropoutRate': str(ARGS.dropoutRate)})
+    # run.finish()
   sess.close()
 
 
@@ -262,6 +262,6 @@ if __name__ == '__main__':
   ARGS = parse_arguments()
   print(ARGS)
 
-  wandb.run.name = ARGS.runName + ARGS.hiddenDimSize
+  # wandb.run.name = ARGS.runName + ARGS.hiddenDimSize
 
   testModel()
