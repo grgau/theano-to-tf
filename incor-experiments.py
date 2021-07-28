@@ -180,16 +180,16 @@ for r in range(3):
   #     print(stdout.decode().split("\n"))
   #     print("\n")
 
-  # hidden [783, 783]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "src/data-incor/incor_90-10_3133" compiled_models/incor-dt-lstm-model --state=hidden --hiddenDimSize=[783,783] --maxConsecutiveNonImprovements=10', shell=True)
-  best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "src/data-incor/incor_90-10_3133"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[783,783] --runName=A_h-INCOR_', shell=True)
+  # # hidden [783, 783]
+  # stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "src/data-incor/incor_90-10_3133" compiled_models/incor-dt-lstm-model --state=hidden --hiddenDimSize=[783,783] --maxConsecutiveNonImprovements=10', shell=True)
+  # best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
+  # stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "src/data-incor/incor_90-10_3133"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[783,783] --runName=A_h-INCOR_', shell=True)
 
-  with open(str(r) + '_dt-lstm-incor-experiments.txt', 'a') as f:
-    with redirect_stdout(f):
-      print("--state=hidden --hiddenDimSize=[783, 783]")
-      print(stdout.decode().split("\n"))
-      print("\n")
+  # with open(str(r) + '_dt-lstm-incor-experiments.txt', 'a') as f:
+  #   with redirect_stdout(f):
+  #     print("--state=hidden --hiddenDimSize=[783, 783]")
+  #     print(stdout.decode().split("\n"))
+  #     print("\n")
 
   # hidden [783, 783, 783]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "src/data-incor/incor_90-10_3133" compiled_models/incor-dt-lstm-model --state=hidden --hiddenDimSize=[783,783,783] --maxConsecutiveNonImprovements=10', shell=True)
