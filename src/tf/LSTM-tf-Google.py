@@ -102,7 +102,7 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
 
 def decoderCell(inputs, lengths):
   inputs = tf.transpose(inputs, [1,0,2])
-  attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(ARGS.attentionDimSize, memory=inputs, memory_sequence_length=lengths)
+  attention_mechanism = tf.contrib.seq2seq.BahdanauMonotonicAttention(ARGS.attentionDimSize, memory=inputs, memory_sequence_length=lengths, normalize=True)
 
   lstms = [tf.nn.rnn_cell.LSTMCell(size) for size in ARGS.hiddenDimSize]  # According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
   lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms]
