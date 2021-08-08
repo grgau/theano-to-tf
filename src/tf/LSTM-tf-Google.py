@@ -102,7 +102,7 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
 
 def decoderCell(inputs, lengths):
   lstms = [tf.nn.rnn_cell.LSTMCell(2*size) for size in ARGS.hiddenDimSize]  # According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-  lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms]
+  lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, output_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms]
   dec_cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
   return dec_cell
 
@@ -113,8 +113,8 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
 
     lstms_f = [tf.nn.rnn_cell.LSTMCell(size) for size in ARGS.hiddenDimSize]
     lstms_b = [tf.nn.rnn_cell.LSTMCell(size) for size in ARGS.hiddenDimSize]
-    lstms_f = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1 - ARGS.dropoutRate)) for lstm in lstms_f]
-    lstms_b = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1 - ARGS.dropoutRate)) for lstm in lstms_b]
+    lstms_f = [tf.nn.rnn_cell.DropoutWrapper(lstm, output_keep_prob=(1 - ARGS.dropoutRate)) for lstm in lstms_f]
+    lstms_b = [tf.nn.rnn_cell.DropoutWrapper(lstm, output_keep_prob=(1 - ARGS.dropoutRate)) for lstm in lstms_b]
     lstms_f = tf.nn.rnn_cell.MultiRNNCell(lstms_f)
     lstms_b = tf.nn.rnn_cell.MultiRNNCell(lstms_b)
 
