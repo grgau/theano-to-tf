@@ -101,7 +101,7 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
   return n_batches, crossEntropySum / dataCount
 
 def decoderCell(inputs, lengths):
-  lstms = [tf.nn.rnn_cell.LSTMCell(size) for size in ARGS.hiddenDimSize]  # According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
+  lstms = [tf.nn.rnn_cell.LSTMCell(2*size) for size in ARGS.hiddenDimSize]  # According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
   lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms]
   dec_cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
   return dec_cell
@@ -129,6 +129,7 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
   cell_state_final = tf.concat([encoder_states_f[-1].c, encoder_states_b[-1].c], -1)
   hidden_state_final = tf.concat([encoder_states_f[-1].h, encoder_states_b[-1].h], -1)
   dec_start_state = tf.nn.rnn_cell.LSTMStateTuple(c=cell_state_final, h=hidden_state_final)
+  dec_start_state = tuple(dec_start_state for _ in range(len(ARGS.hiddenDimSize)))
 
   go_token = 2.
   end_token = 2.
@@ -143,11 +144,11 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
     dec_cell = decoderCell(encoder_outputs, seqLen)
 
     helper = tf.contrib.seq2seq.TrainingHelper(inputs=dec_input, sequence_length=seqLen, time_major=True)
-    decoder = tf.contrib.seq2seq.BasicDecoder(cell=dec_cell, helper=helper, initial_state=encoder_states_f)
+    decoder = tf.contrib.seq2seq.BasicDecoder(cell=dec_cell, helper=helper, initial_state=dec_start_state)
 
     training_outputs, training_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=decoder, output_time_major=True)
 
-  tiled_start_state = tf.contrib.seq2seq.tile_batch(encoder_states_f, multiplier=ARGS.beamWidth)
+  tiled_start_state = tf.contrib.seq2seq.tile_batch(dec_start_state, multiplier=ARGS.beamWidth)
   tiled_encoder_outputs = tf.contrib.seq2seq.tile_batch(encoder_outputs, multiplier=ARGS.beamWidth)
   tiled_lengths = tf.contrib.seq2seq.tile_batch(seqLen, multiplier=ARGS.beamWidth)
 
@@ -159,7 +160,7 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
 
     inference_decoder = tf.contrib.seq2seq.BeamSearchDecoder(
       cell=dec_cell,
-      embedding=tf.Variable(tf.zeros([ARGS.hiddenDimSize[-1], ARGS.numberOfInputCodes])),
+      embedding=tf.Variable(tf.zeros([ARGS.hiddenDimSize[-1]*2, ARGS.numberOfInputCodes])),
       start_tokens=tf.ones_like(seqLen) * go_token,
       end_token=end_token,
       initial_state=tiled_start_state,
