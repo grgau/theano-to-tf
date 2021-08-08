@@ -109,13 +109,26 @@ def decoderCell(inputs, lengths):
 def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
   # Encoder
   with tf.variable_scope('encoder'):
-    lstms = [tf.nn.rnn_cell.LSTMCell(size) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-    lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms]
-    enc_cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
-    encoder_outputs, encoder_states = tf.nn.dynamic_rnn(enc_cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+    seqLen = tf.cast(seqLen, dtype=tf.int32)
 
-  dec_start_state = tuple(encoder_states[-1] for _ in range(len(ARGS.hiddenDimSize)))
-  seqLen = tf.cast(seqLen, dtype=tf.int32)
+    lstms_f = [tf.nn.rnn_cell.LSTMCell(size) for size in ARGS.hiddenDimSize]
+    lstms_b = [tf.nn.rnn_cell.LSTMCell(size) for size in ARGS.hiddenDimSize]
+    lstms_f = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1 - ARGS.dropoutRate)) for lstm in lstms_f]
+    lstms_b = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1 - ARGS.dropoutRate)) for lstm in lstms_b]
+    lstms_f = tf.nn.rnn_cell.MultiRNNCell(lstms_f)
+    lstms_b = tf.nn.rnn_cell.MultiRNNCell(lstms_b)
+
+    (encoder_outputs_f, encoder_outputs_b), (encoder_states_f, encoder_states_b) = tf.nn.bidirectional_dynamic_rnn(cell_fw=lstms_f,
+                                                                                                       cell_bw=lstms_b,
+                                                                                                       inputs=inputTensor,
+                                                                                                       sequence_length=seqLen,
+                                                                                                       time_major=True,
+                                                                                                       dtype=tf.float32)
+
+  encoder_outputs = tf.concat([encoder_outputs_f, encoder_outputs_b], -1)
+  cell_state_final = tf.concat([encoder_states_f[-1].c, encoder_states_b[-1].c], -1)
+  hidden_state_final = tf.concat([encoder_states_f[-1].h, encoder_states_b[-1].h], -1)
+  dec_start_state = tf.nn.rnn_cell.LSTMStateTuple(c=cell_state_final, h=hidden_state_final)
 
   go_token = 2.
   end_token = 2.
@@ -130,11 +143,11 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
     dec_cell = decoderCell(encoder_outputs, seqLen)
 
     helper = tf.contrib.seq2seq.TrainingHelper(inputs=dec_input, sequence_length=seqLen, time_major=True)
-    decoder = tf.contrib.seq2seq.BasicDecoder(cell=dec_cell, helper=helper, initial_state=dec_start_state)
+    decoder = tf.contrib.seq2seq.BasicDecoder(cell=dec_cell, helper=helper, initial_state=encoder_states_f)
 
     training_outputs, training_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=decoder, output_time_major=True)
 
-  tiled_start_state = tf.contrib.seq2seq.tile_batch(dec_start_state, multiplier=ARGS.beamWidth)
+  tiled_start_state = tf.contrib.seq2seq.tile_batch(encoder_states_f, multiplier=ARGS.beamWidth)
   tiled_encoder_outputs = tf.contrib.seq2seq.tile_batch(encoder_outputs, multiplier=ARGS.beamWidth)
   tiled_lengths = tf.contrib.seq2seq.tile_batch(seqLen, multiplier=ARGS.beamWidth)
 
