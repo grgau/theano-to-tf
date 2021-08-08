@@ -92,16 +92,21 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
   return n_batches, crossEntropySum / dataCount
 
 def LSTMGoogle_layer(inputTensor, seqLen):
-  # lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=False) for size in ARGS.hiddenDimSize]
+  inputs = tf.transpose(inputTensor, [1,0,2])
+  attention_mechanism = tf.contrib.seq2seq.BahdanauMonotonicAttention(ARGS.attentionDimSize, memory=inputs, memory_sequence_length=seqLen, normalize=True)
+
   lstms = [tf.nn.rnn_cell.LSTMCell(size, use_peepholes=True, num_proj=size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
   drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms]
   cell = tf.nn.rnn_cell.MultiRNNCell(drops)
-  lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+  att_cell = tf.contrib.seq2seq.AttentionWrapper(cell, attention_mechanism)
 
+  lstm_outputs, lstm_states = tf.nn.dynamic_rnn(att_cell, inputs, sequence_length=seqLen, time_major=False, dtype=tf.float32)
+
+  # return lstm_states.attention
   if ARGS.state == "cell":
-    return lstm_states[-1].c  # lstm_states has shape (c, h) where c are the cell states and h the hidden states
+    return lstm_states.cell_state[-1].c
   elif ARGS.state == "hidden":
-    return lstm_states[-1].h  # lstm_states has shape (c, h) where c are the cell states and h the hidden states
+    return lstm_states.cell_state[-1].h
   else:
     return lstm_outputs
 
@@ -222,6 +227,7 @@ def parse_arguments():
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .train and .test files) with pickled data organized as patient x admission x codes.')
   parser.add_argument('outFile', metavar='out_file', default='model_output', help='Any file directory to store the model.')
   parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=5, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
+  parser.add_argument('--attentionDimSize', type=int, default=10, help='Number of attention layer dense units')
   parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
   parser.add_argument('--state', type=str, default='cell', help='Pass cell, hidden or attention to fully connected layer')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
