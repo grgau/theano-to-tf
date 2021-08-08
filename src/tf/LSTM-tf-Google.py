@@ -92,17 +92,27 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
   return n_batches, crossEntropySum / dataCount
 
 def LSTMGoogle_layer(inputTensor, seqLen):
-  # lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=False) for size in ARGS.hiddenDimSize]
-  lstms = [tf.nn.rnn_cell.LSTMCell(size, use_peepholes=True, num_proj=size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-  drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms]
-  cell = tf.nn.rnn_cell.MultiRNNCell(drops)
-  lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+  seqLen = tf.cast(seqLen, dtype=tf.int32)
+
+  lstms_f = [tf.nn.rnn_cell.LSTMCell(size, use_peepholes=True, num_proj=size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
+  lstms_b = [tf.nn.rnn_cell.LSTMCell(size, use_peepholes=True, num_proj=size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
+
+  drops_f = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms_f]
+  drops_b = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms_b]
+
+  cell_f = tf.nn.rnn_cell.MultiRNNCell(drops_f)
+  cell_b = tf.nn.rnn_cell.MultiRNNCell(drops_b)
+
+  (lstm_outputs_f, lstm_outputs_b) , (lstm_states_f, lstm_states_b) = tf.nn.bidirectional_dynamic_rnn(cell_fw=cell_f, cell_bw=cell_b, inputs=inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
 
   if ARGS.state == "cell":
-    return lstm_states[-1].c  # lstm_states has shape (c, h) where c are the cell states and h the hidden states
+    lstm_states = tf.concat([lstm_states_f[-1].c, lstm_states_b[-1].c], axis=-1)
+    return lstm_states  # lstm_states has shape (c, h) where c are the cell states and h the hidden states
   elif ARGS.state == "hidden":
-    return lstm_states[-1].h  # lstm_states has shape (c, h) where c are the cell states and h the hidden states
+    lstm_states = tf.concat([lstm_states_f[-1].h, lstm_states_b[-1].h], axis=-1)
+    return lstm_states  # lstm_states has shape (c, h) where c are the cell states and h the hidden states
   else:
+    lstm_outputs = tf.concat([lstm_outputs_f, lstm_outputs_b], axis=-1)
     return lstm_outputs
 
 def FC_layer(inputTensor):
@@ -138,7 +148,7 @@ def build_model():
       prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
       L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
 
-      optimizer = tf.train.AdadeltaOptimizer(learning_rate=1.0, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+      optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
     return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
 def train_model():
@@ -221,12 +231,13 @@ def parse_arguments():
   parser = argparse.ArgumentParser()
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .train and .test files) with pickled data organized as patient x admission x codes.')
   parser.add_argument('outFile', metavar='out_file', default='model_output', help='Any file directory to store the model.')
-  parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=5, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
+  parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=10, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
   parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
   parser.add_argument('--state', type=str, default='cell', help='Pass cell, hidden or attention to fully connected layer')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
+  parser.add_argument('--learningRate', type=float, default=0.5, help='Learning rate.')
   parser.add_argument('--dropoutRate', type=float, default=0.45, help='Dropout probability.')
 
   ARGStemp = parser.parse_args()
