@@ -166,7 +166,7 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
       initial_state=tiled_start_state,
       beam_width=ARGS.beamWidth)
 
-    inference_outputs, inference_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=inference_decoder, output_time_major=True, maximum_iterations=1)
+    inference_outputs, inference_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=inference_decoder, output_time_major=True, maximum_iterations=ARGS.maxDecoderIterations)
 
   if ARGS.state == "cell":
     inference_outputs = tf.transpose(inference_state.cell_state[-1].c, [1,0,2])
@@ -323,6 +323,7 @@ def parse_arguments():
   parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
   parser.add_argument('--state', type=str, default='cell', help='Pass cell, hidden or attention to fully connected layer')
   parser.add_argument('--attentionDimSize', type=int, default=10, help='Number of attention layer dense units')
+  parser.add_argument('--maxDecoderIterations', type=int, default=1, help='Maximum Inference Decoder iterations over predicted data')
   parser.add_argument('--beamWidth', type=int, default=1, help='Beam width size')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
