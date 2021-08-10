@@ -193,11 +193,15 @@ def build_model():
 
       epislon = 1e-8
       cross_entropy = -(yf * tf.log(flowingTensor + epislon) + (1. - yf) * tf.log(1. - flowingTensor + epislon))
-      prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
-      L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
+      prediction_loss = tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen
+      L2_regularized_loss = tf.math.reduce_mean(prediction_loss) + ARGS.LregularizationAlpha*tf.math.reduce_sum((weights ** 2))
 
-      # optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
-      optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001, decay=0.95, momentum=0.0, epsilon=1e-10).minimize(L2_regularized_loss)
+      optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06)
+      gvs = optimizer.compute_gradients(L2_regularized_loss)
+      capped_gvs = [(tf.clip_by_value(grad, -0.5, 0.5), var) for grad, var in gvs]
+      train_op = optimizer.apply_gradients(capped_gvs)
+
+      # optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001, decay=0.95, momentum=0.0, epsilon=1e-10).minimize(L2_regularized_loss)
 
       # Bahdanau (855)
       # global_step = tf.Variable(0, trainable=False)
@@ -214,7 +218,7 @@ def build_model():
       # learning_rate = tf.train.exponential_decay(1.0, global_step, 100, 0.9)
       # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
 
-    return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
+    return tf.global_variables_initializer(), graph, train_op, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
 def train_model():
   print("==> data loading")
