@@ -196,10 +196,10 @@ def build_model():
       prediction_loss = tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen
       L2_regularized_loss = tf.math.reduce_mean(prediction_loss) + ARGS.LregularizationAlpha*tf.math.reduce_sum((weights ** 2))
 
-      optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06)
-      gvs = optimizer.compute_gradients(L2_regularized_loss)
-      capped_gvs = [(tf.clip_by_value(grad, -0.5, 0.5), var) for grad, var in gvs]
-      train_op = optimizer.apply_gradients(capped_gvs)
+      # optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+      # gvs = optimizer.compute_gradients(L2_regularized_loss)
+      # capped_gvs = [(tf.clip_by_value(grad, -0.5, 0.5), var) for grad, var in gvs]
+      # train_op = optimizer.apply_gradients(capped_gvs)
 
       # optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001, decay=0.95, momentum=0.0, epsilon=1e-10).minimize(L2_regularized_loss)
 
@@ -218,7 +218,11 @@ def build_model():
       # learning_rate = tf.train.exponential_decay(1.0, global_step, 100, 0.9)
       # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
 
-    return tf.global_variables_initializer(), graph, train_op, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
+      global_step = tf.Variable(ARGS.globalStep, trainable=False)
+      learning_rate = tf.train.exponential_decay(ARGS.learningRate, global_step, ARGS.decaySteps, ARGS.decayRate)
+      optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
+
+    return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
 def train_model():
   print("==> data loading")
@@ -319,6 +323,9 @@ def parse_arguments():
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
   parser.add_argument('--learningRate', type=float, default=0.5, help='Learning rate.')
+  parser.add_argument('--globalStep', type=float, default=0, help='Global step.')
+  parser.add_argument('--decaySteps', type=float, default=1000, help='Decay steps.')
+  parser.add_argument('--decayRate', type=float, default=0.7, help='Decay rate.')
   parser.add_argument('--dropoutRate', type=float, default=0.45, help='Dropout probability.')
 
   ARGStemp = parser.parse_args()
