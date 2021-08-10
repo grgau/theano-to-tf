@@ -122,7 +122,7 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
   seqLen = tf.cast(seqLen, dtype=tf.int32)
 
   go_token = 2.
-  end_token = 2.
+  end_token = 3.
 
   go_tokens = tf.fill((1, tf.shape(targetTensor)[1], ARGS.numberOfInputCodes), go_token)
   end_tokens = tf.fill((1, tf.shape(targetTensor)[1], ARGS.numberOfInputCodes), end_token)
@@ -209,6 +209,7 @@ def build_model():
       L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
 
       # optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+      optimizer = tf.train.RMSPropOptimizer(learning_rate=ARGS.learningRate, decay=ARGS.decay, momentum=ARGS.momentum, epsilon=1e-10).minimize(L2_regularized_loss)
 
       # Bahdanau (855)
       # global_step = tf.Variable(0, trainable=False)
@@ -225,9 +226,9 @@ def build_model():
       # learning_rate = tf.train.exponential_decay(1.0, global_step, 100, 0.9)
       # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
 
-      global_step = tf.Variable(ARGS.globalStep, trainable=False)
-      learning_rate = tf.train.exponential_decay(ARGS.learningRate, global_step, ARGS.decaySteps, ARGS.decayRate)
-      optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
+      # global_step = tf.Variable(ARGS.globalStep, trainable=False)
+      # learning_rate = tf.train.exponential_decay(ARGS.learningRate, global_step, ARGS.decaySteps, ARGS.decayRate)
+      # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
 
     return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
@@ -331,9 +332,11 @@ def parse_arguments():
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
   parser.add_argument('--learningRate', type=float, default=0.5, help='Learning rate.')
-  parser.add_argument('--globalStep', type=float, default=0, help='Global step.')
-  parser.add_argument('--decaySteps', type=float, default=1000, help='Decay steps.')
-  parser.add_argument('--decayRate', type=float, default=0.7, help='Decay rate.')
+  parser.add_argument('--decay', type=float, default=0.5, help='Decay.')
+  parser.add_argument('--momentum', type=float, default=0.5, help='Momentum.')
+  # parser.add_argument('--globalStep', type=float, default=0, help='Global step.')
+  # parser.add_argument('--decaySteps', type=float, default=1000, help='Decay steps.')
+  # parser.add_argument('--decayRate', type=float, default=0.7, help='Decay rate.')
   parser.add_argument('--dropoutRate', type=float, default=0.45, help='Dropout probability.')
 
   ARGStemp = parser.parse_args()
