@@ -248,7 +248,7 @@ def parse_arguments():
   parser = argparse.ArgumentParser()
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .test file) with pickled data organized as patient x admission x codes.')
   parser.add_argument('modelPath', type=str, metavar='<model_path>', help='The path to the model directory')
-  # parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
+  parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   # parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Hidden dimension sizes (only for saving on wandb')
   # parser.add_argument('--learningRate', type=float, default=0.5, help='Learning rate.')
   # parser.add_argument('--dropoutRate', type=float, default=0.45, help='Dropout probability.')
