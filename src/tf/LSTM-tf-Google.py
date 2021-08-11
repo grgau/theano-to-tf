@@ -92,12 +92,22 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
   return n_batches, crossEntropySum / dataCount
 
 def GRU_layer(inputTensor, seqLen):
-  grus = [tf.nn.rnn_cell.GRUCell(size) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-  drops = [tf.nn.rnn_cell.DropoutWrapper(gru, state_keep_prob=(1-ARGS.dropoutRate)) for gru in grus]
-  cell = tf.nn.rnn_cell.MultiRNNCell(drops)
-  gru_outputs, gru_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+  seqLen = tf.cast(seqLen, dtype=tf.int32)
 
-  return gru_states[-1]
+  grus_f = [tf.nn.rnn_cell.GRUCell(size) for size in ARGS.hiddenDimSize]
+  grus_b = [tf.nn.rnn_cell.GRUCell(size) for size in ARGS.hiddenDimSize]
+
+  drops_f = [tf.nn.rnn_cell.DropoutWrapper(gru, output_keep_prob=(1-ARGS.dropoutRate)) for gru in grus_f]
+  drops_b = [tf.nn.rnn_cell.DropoutWrapper(gru, output_keep_prob=(1-ARGS.dropoutRate)) for gru in grus_b]
+
+  cell_f = tf.nn.rnn_cell.MultiRNNCell(drops_f)
+  cell_b = tf.nn.rnn_cell.MultiRNNCell(drops_b)
+
+  (gru_outputs_f, gru_outputs_b) , (gru_states_f, gru_states_b) = tf.nn.bidirectional_dynamic_rnn(cell_fw=cell_f, cell_bw=cell_b, inputs=inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+
+  gru_states = tf.concat([gru_states_f[-1], gru_states_b[-1]], axis=-1)
+
+  return gru_states
 
 def FC_layer(inputTensor):
   im_dim = inputTensor.get_shape()[-1]
@@ -130,7 +140,7 @@ def build_model():
       epislon = 1e-8
       cross_entropy = -(yf * tf.log(flowingTensor + epislon) + (1. - yf) * tf.log(1. - flowingTensor + epislon))
       prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
-      L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
+      L2_regularized_loss = prediction_loss + ARGS.LregularizationAlpha * tf.math.reduce_sum((weights ** 2))
 
       optimizer = tf.train.AdadeltaOptimizer(learning_rate=1.0, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
     return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
