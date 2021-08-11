@@ -97,8 +97,8 @@ def LSTMGoogle_layer(inputTensor, seqLen):
   lstms_f = [tf.nn.rnn_cell.LSTMCell(size, use_peepholes=True, num_proj=size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
   lstms_b = [tf.nn.rnn_cell.LSTMCell(size, use_peepholes=True, num_proj=size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
 
-  drops_f = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms_f]
-  drops_b = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms_b]
+  drops_f = [tf.nn.rnn_cell.DropoutWrapper(lstm, output_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms_f]
+  drops_b = [tf.nn.rnn_cell.DropoutWrapper(lstm, output_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms_b]
 
   cell_f = tf.nn.rnn_cell.MultiRNNCell(drops_f)
   cell_b = tf.nn.rnn_cell.MultiRNNCell(drops_b)
