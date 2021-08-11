@@ -109,7 +109,7 @@ def EncoderDecoder(inputTensor, targetTensor, embeddingTensor, ground_truth_leng
 
   with tf.variable_scope('encoder'):
     lstms = [tf.contrib.rnn.LSTMCell(size, state_is_tuple=True) for size in ARGS.hiddenDimSize]
-    lstms = [tf.contrib.rnn.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
+    lstms = [tf.contrib.rnn.DropoutWrapper(lstm, output_keep_prob=ARGS.dropoutRate) for lstm in lstms]
     encoder_cell = tf.contrib.rnn.MultiRNNCell(lstms)
     encoder_outputs, encoder_states = tf.nn.dynamic_rnn(encoder_cell, input_batch_embedded, dtype=tf.float32)
 
@@ -180,7 +180,7 @@ def EncoderDecoderBahdanau_layer(inputTensor, targetTensor, vocab, seqLen):
 
     # Decoder
     lstms = [tf.contrib.rnn.LSTMCell(size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-    lstms = [tf.contrib.rnn.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
+    lstms = [tf.contrib.rnn.DropoutWrapper(lstm, output_keep_prob=ARGS.dropoutRate) for lstm in lstms]
     dec_cell = tf.contrib.rnn.MultiRNNCell(lstms)
     # dec_cell = tf.keras.layers.LSTMCell(271)
 
@@ -253,7 +253,7 @@ def EncoderDecoderBahdanau_layer(inputTensor, targetTensor, vocab, seqLen):
 def LSTMGoogle_layer(inputTensor, seqLen):
   # lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=False) for size in ARGS.hiddenDimSize]
   lstms = [tf.nn.rnn_cell.LSTMCell(size, use_peepholes=True, num_proj=size, state_is_tuple=True) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
-  drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=ARGS.dropoutRate) for lstm in lstms]
+  drops = [tf.nn.rnn_cell.DropoutWrapper(lstm, output_keep_prob=ARGS.dropoutRate) for lstm in lstms]
   cell = tf.nn.rnn_cell.MultiRNNCell(drops)
   lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
   return lstm_states[-1].c #lstm_states has shape (c, h) where c are the cell states and h the hidden states
