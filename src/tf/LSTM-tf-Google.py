@@ -110,7 +110,7 @@ def GRU_layer(inputTensor, seqLen):
 
   if ARGS.state == "states":
     return gru_states
-  else
+  else:
     return gru_outputs
 
 def FC_layer(inputTensor):
