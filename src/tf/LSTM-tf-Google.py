@@ -106,8 +106,12 @@ def GRU_layer(inputTensor, seqLen):
   (gru_outputs_f, gru_outputs_b) , (gru_states_f, gru_states_b) = tf.nn.bidirectional_dynamic_rnn(cell_fw=cell_f, cell_bw=cell_b, inputs=inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
 
   gru_states = tf.concat([gru_states_f[-1], gru_states_b[-1]], axis=-1)
+  gru_outputs = tf.concat([gru_outputs_f[-1], gru_outputs_b[-1]], axis=-1)
 
-  return gru_states
+  if ARGS.state == "states":
+    return gru_states
+  else
+    return gru_outputs
 
 def FC_layer(inputTensor):
   im_dim = inputTensor.get_shape()[-1]
@@ -227,6 +231,7 @@ def parse_arguments():
   parser.add_argument('outFile', metavar='out_file', default='model_output', help='Any file directory to store the model.')
   parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=5, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
   parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
+  parser.add_argument('--state', type=str, default='states', help='Pass states or outputs from GRU to fully connected.')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
