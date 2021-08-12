@@ -101,7 +101,7 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
   return n_batches, crossEntropySum / dataCount
 
 def decoderCell(inputs, lengths):
-  inputs = tf.transpose(inputs, [1,0,2])
+  # inputs = tf.transpose(inputs, [1,0,2])
   attention_mechanism = tf.contrib.seq2seq.BahdanauMonotonicAttention(ARGS.attentionDimSize, memory=inputs, memory_sequence_length=lengths, normalize=True)
 
   lstms = [tf.nn.rnn_cell.LSTMCell(size) for size in ARGS.hiddenDimSize]  # According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
@@ -111,12 +111,13 @@ def decoderCell(inputs, lengths):
   return dec_cell
 
 def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
+  inputTensor = tf.transpose(inputTensor, [1,0,2])
   # Encoder
   with tf.variable_scope('encoder'):
     lstms = [tf.nn.rnn_cell.LSTMCell(size) for size in ARGS.hiddenDimSize] #According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
     lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, output_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms]
     enc_cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
-    encoder_outputs, encoder_states = tf.nn.dynamic_rnn(enc_cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
+    encoder_outputs, encoder_states = tf.nn.dynamic_rnn(enc_cell, inputTensor, sequence_length=seqLen, time_major=False, dtype=tf.float32)
 
   dec_start_state = tuple(encoder_states[-1] for _ in range(len(ARGS.hiddenDimSize)))
   seqLen = tf.cast(seqLen, dtype=tf.int32)
@@ -124,10 +125,10 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
   go_token = 2.
   end_token = 3.
 
-  go_tokens = tf.fill((1, tf.shape(targetTensor)[1], ARGS.numberOfInputCodes), go_token)
-  end_tokens = tf.fill((1, tf.shape(targetTensor)[1], ARGS.numberOfInputCodes), end_token)
-  dec_input = tf.concat([go_tokens, targetTensor], axis=0)
-  dec_input = tf.concat([dec_input, end_tokens], axis=1)
+  go_tokens = tf.fill((1, tf.shape(targetTensor)[0], ARGS.numberOfInputCodes), go_token)
+  end_tokens = tf.fill((1, tf.shape(targetTensor)[0], ARGS.numberOfInputCodes), end_token)
+  dec_input = tf.concat([go_tokens, targetTensor], axis=1)
+  dec_input = tf.concat([dec_input, end_tokens], axis=0)
   # dec_input = tf.concat([tf.strided_slice(dec_input, begin=[-1, 0, 0], end=[-1, tf.shape(dec_input)[1], ARGS.numberOfInputCodes], strides=[1,1,1]), end_tokens], axis=-1)
 
   with tf.variable_scope('decoder'):
@@ -136,10 +137,10 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
     init_state = dec_cell.zero_state(tf.shape(targetTensor)[1], tf.float32)
     init_state = init_state.clone(cell_state=dec_start_state)
 
-    helper = tf.contrib.seq2seq.TrainingHelper(inputs=dec_input, sequence_length=seqLen, time_major=True)
+    helper = tf.contrib.seq2seq.TrainingHelper(inputs=dec_input, sequence_length=seqLen, time_major=False)
     decoder = tf.contrib.seq2seq.BasicDecoder(cell=dec_cell, helper=helper, initial_state=init_state)
 
-    training_outputs, training_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=decoder, output_time_major=True)
+    training_outputs, training_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=decoder, output_time_major=False)
 
   tiled_start_state = tf.contrib.seq2seq.tile_batch(dec_start_state, multiplier=ARGS.beamWidth)
   tiled_encoder_outputs = tf.contrib.seq2seq.tile_batch(encoder_outputs, multiplier=ARGS.beamWidth)
@@ -162,10 +163,11 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
       initial_state=init_state,
       beam_width=ARGS.beamWidth)
 
-    inference_outputs, inference_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=inference_decoder, output_time_major=True, maximum_iterations=ARGS.maxDecoderIterations)
+    inference_outputs, inference_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=inference_decoder, output_time_major=False, maximum_iterations=ARGS.maxDecoderIterations)
 
   if ARGS.state == "cell":
     inference_outputs = tf.transpose(inference_state.cell_state.cell_state[-1].c, [1,0,2])
+    # inference_outputs = inference_state.cell_state.cell_state[-1].c
   elif ARGS.state == "hidden":
     inference_outputs = tf.transpose(inference_state.cell_state.cell_state[-1].h, [1,0,2])
   elif ARGS.state == "attention":
