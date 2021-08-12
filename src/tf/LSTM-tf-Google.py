@@ -204,7 +204,7 @@ def build_model():
       flowingTensor = EncoderDecoderAttention_layer(xf, yf, seqLen)
       flowingTensor, weights, bias = FC_layer(flowingTensor)
       flowingTensor = tf.nn.softmax(flowingTensor, name="predictions")
-      flowingTensor = flowingTensor * maskf[:,:,None]
+      flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None])
 
       epislon = 1e-8
       cross_entropy = -(yf * tf.math.log(flowingTensor + epislon) + (1. - yf) * tf.math.log(1. - flowingTensor + epislon))
