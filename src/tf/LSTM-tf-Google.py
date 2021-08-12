@@ -100,6 +100,90 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
       #At the end, it returns the mean cross entropy considering all the batches
   return n_batches, crossEntropySum / dataCount
 
+def testModel(session, predictions, x, y, mask, seqLen, test_Set):
+  batchSize = ARGS.batchSize
+  predictedY_list = []
+  predictedProbabilities_list = []
+  actualY_list = []
+  predicted_yList = []
+  n_batches = int(np.ceil(float(len(test_Set[0])) / float(batchSize))) #default batch size is 100
+
+  with session.as_default() as sess:
+    for index in range(n_batches):
+      batchX = test_Set[0][index * batchSize:(index + 1) * batchSize]
+      batchY = test_Set[1][index * batchSize:(index + 1) * batchSize]
+      xf, yf, maskf, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
+      maxNumberOfAdmissions = np.max(nVisitsOfEachPatient_List)
+
+      predicted_y = sess.run(predictions, feed_dict={x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List})
+      predicted_yList.append(predicted_y.tolist()[-1])
+
+      # traverse the predicted results, once for each patient in the batch
+      for ith_patient in range(predicted_y.shape[1]):
+        predictedPatientSlice = predicted_y[:, ith_patient, :]
+        # retrieve actual y from batch tensor -> actual codes, not the hotvector
+        actual_y = batchY[ith_patient][1:]
+        # for each admission of the ith-patient
+        for ith_admission in range(nVisitsOfEachPatient_List[ith_patient]):
+          # convert array of actual answers to list
+          actualY_list.append(actual_y[ith_admission])
+          # retrieves ith-admission of ths ith-patient
+          ithPrediction = predictedPatientSlice[ith_admission]
+          # since ithPrediction is a vector of probabilties with the same dimensionality of the hotvectors
+          # enumerate is enough to retrieve the original codes
+          enumeratedPrediction = [codeProbability_pair for codeProbability_pair in enumerate(ithPrediction)]
+          # sort everything
+          sortedPredictionsAll = sorted(enumeratedPrediction, key=lambda x: x[1], reverse=True)
+          # creates trimmed list up to max(maxNumberOfAdmissions,30) elements
+          sortedTopPredictions = sortedPredictionsAll[0:max(maxNumberOfAdmissions, 30)]
+          # here we simply toss off the probability and keep only the sorted codes
+          sortedTopPredictions_indexes = [codeProbability_pair[0] for codeProbability_pair in sortedTopPredictions]
+          # stores results in a list of lists - after processing all batches, predictedY_list stores all the prediction results
+          predictedY_list.append(sortedTopPredictions_indexes)
+          predictedProbabilities_list.append(sortedPredictionsAll)
+
+    # ---------------------------------Report results using k=[10,20,30]
+    print('==> computation of prediction results with constant k')
+    recall_sum = [0.0, 0.0, 0.0]
+
+    k_list = [10, 20, 30]
+    for ith_admission in range(len(predictedY_list)):
+      ithActualYSet = set(actualY_list[ith_admission])
+      for ithK, k in enumerate(k_list):
+        ithPredictedY = set(predictedY_list[ith_admission][:k])
+        intersection_set = ithActualYSet.intersection(ithPredictedY)
+        recall_sum[ithK] += len(intersection_set) / float(
+          len(ithActualYSet))  # this is recall because the numerator is len(ithActualYSet)
+
+    precision_sum = [0.0, 0.0, 0.0]
+    k_listForPrecision = [1, 2, 3]
+    for ith_admission in range(len(predictedY_list)):
+      ithActualYSet = set(actualY_list[ith_admission])
+      for ithK, k in enumerate(k_listForPrecision):
+        ithPredictedY = set(predictedY_list[ith_admission][:k])
+        intersection_set = ithActualYSet.intersection(ithPredictedY)
+        precision_sum[ithK] += len(intersection_set) / float(
+          k)  # this is precision because the numerator is k \in [10,20,30]
+
+    finalRecalls = []
+    finalPrecisions = []
+    for ithK, k in enumerate(k_list):
+      finalRecalls.append(recall_sum[ithK] / float(len(predictedY_list)))
+      finalPrecisions.append(precision_sum[ithK] / float(len(predictedY_list)))
+
+    print('Results for Recall@' + str(k_list))
+    print(str(finalRecalls[0]))
+    print(str(finalRecalls[1]))
+    print(str(finalRecalls[2]))
+
+    print('Results for Precision@' + str(k_listForPrecision))
+    print(str(finalPrecisions[0]))
+    print(str(finalPrecisions[1]))
+    print(str(finalPrecisions[2]))
+
+  return
+
+
 def decoderCell(inputs, lengths):
   # inputs = tf.transpose(inputs, [1,0,2])
   attention_mechanism = tf.contrib.seq2seq.BahdanauMonotonicAttention(ARGS.attentionDimSize, memory=inputs, memory_sequence_length=lengths, normalize=True)
@@ -204,7 +288,7 @@ def build_model():
       flowingTensor = EncoderDecoderAttention_layer(xf, yf, seqLen)
       flowingTensor, weights, bias = FC_layer(flowingTensor)
       flowingTensor = tf.nn.softmax(flowingTensor, name="predictions")
-      flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None])
+      flowingTensor = flowingTensor * maskf[:,:,None]
 
       epislon = 1e-8
       cross_entropy = -(yf * tf.math.log(flowingTensor + epislon) + (1. - yf) * tf.math.log(1. - flowingTensor + epislon))
@@ -213,25 +297,6 @@ def build_model():
 
       optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
       # optimizer = tf.train.AdamOptimizer(learning_rate=ARGS.learningRate, beta1=0.9, beta2=0.999, epsilon=1e-08, use_locking=False).minimize(L2_regularized_loss)
-
-      # Bahdanau (855)
-      # global_step = tf.Variable(0, trainable=False)
-      # learning_rate = tf.train.exponential_decay(1.0, global_step, 1000, 0.68)
-      # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
-
-      # Bahdanau (271)
-      # global_step = tf.Variable(0, trainable=False)
-      # learning_rate = tf.train.exponential_decay(1.0, global_step, 100, 0.7)
-      # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
-
-      # Luong
-      # global_step = tf.Variable(0, trainable=False)
-      # learning_rate = tf.train.exponential_decay(1.0, global_step, 100, 0.9)
-      # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
-
-      # global_step = tf.Variable(ARGS.globalStep, trainable=False)
-      # learning_rate = tf.train.exponential_decay(ARGS.learningRate, global_step, ARGS.decaySteps, ARGS.decayRate)
-      # optimizer = tf.train.AdadeltaOptimizer(learning_rate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss, global_step=global_step)
 
     return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
@@ -265,16 +330,6 @@ def train_model():
         batchY = trainSet[1][index*batchSize:(index + 1)*batchSize]
         xf, yf, maskf, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
         xf += np.random.normal(0, 0.1, xf.shape)
-
-        # start_token = np.full((xf.shape[0], xf.shape[1], 1), 100)
-        # # xf = np.concatenate([start_token, xf], axis=-1)
-        # yf = np.concatenate([start_token, yf], axis=-1)
-        #
-        # end_token = np.full((yf.shape[0], yf.shape[1], 1), 200)
-        # yf = np.concatenate([yf, end_token], axis=-1)
-
-        # xf = np.concatenate([xf[-1], np.full((xf.shape[1], 1), -2.)], axis=-1)
-        # yf = np.concatenate([yf[-1], np.full((yf.shape[1], 1), -2.)], axis=-1)
 
         feed_dict = {x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List}
         _, trainCrossEntropy = sess.run([optimizer, loss], feed_dict=feed_dict)
@@ -318,6 +373,9 @@ def train_model():
     print('Number of improvement epochs: ' + str(iImprovementEpochs) + ' out of ' + str(epoch_counter + 1) + ' possible improvements.')
     print('Note: the smaller the cross entropy, the better.')
     print('-----------------------------------')
+
+    testModel(sess, predictions, x, y, mask, seqLen, testSet)
+
     sess.close()
 
 
