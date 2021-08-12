@@ -96,7 +96,7 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
 def DTLSTM_layer(inputTensor, seqLen):
   # lstms = [tf.nn.rnn_cell.BasicLSTMCell(size, state_is_tuple=True) for size in ARGS.hiddenDimSize]
   lstms = [DT_LSTMCell(size, dtype=tf.float32, state_is_tuple=True) for size in [ARGS.hiddenDimSize]]
-  lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, state_keep_prob=1-ARGS.dropoutRate, seed=13713) for lstm in lstms]
+  lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, output_keep_prob=1-ARGS.dropoutRate, seed=13713) for lstm in lstms]
   cell = tf.nn.rnn_cell.MultiRNNCell(lstms, state_is_tuple=True)
   lstm_outputs, lstm_states = tf.nn.dynamic_rnn(cell, inputTensor, sequence_length=seqLen, time_major=True, dtype=tf.float32)
 
@@ -139,7 +139,7 @@ def build_model():
       epislon = 1e-8
       cross_entropy = -(yf * tf.log(flowingTensor + epislon) + (1. - yf) * tf.log(1. - flowingTensor + epislon))
       prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
-      L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
+      L2_regularized_loss = prediction_loss + ARGS.LregularizationAlpha * tf.nn.l2_loss(weights)
 
       optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.LearningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
 
