@@ -201,6 +201,7 @@ def build_model():
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
 
     with tf.device('/gpu:0'):
+      maskf = tf.transpose(maskf, [1,0])
       flowingTensor = EncoderDecoderAttention_layer(xf, yf, seqLen)
       flowingTensor, weights, bias = FC_layer(flowingTensor)
       flowingTensor = tf.nn.softmax(flowingTensor)
