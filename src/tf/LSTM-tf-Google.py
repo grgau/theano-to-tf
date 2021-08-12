@@ -187,7 +187,7 @@ def FC_layer(inputTensor):
                            shape=[ARGS.numberOfInputCodes],
                            dtype=tf.float32,
                            initializer=tf.zeros_initializer())
-  output = tf.nn.softmax(tf.nn.leaky_relu(tf.add(tf.matmul(inputTensor, weights), bias)))
+  output = tf.nn.leaky_relu(tf.add(tf.matmul(inputTensor, weights), bias))
   return output, weights, bias
 
 def build_model():
@@ -201,15 +201,16 @@ def build_model():
     with tf.device('/gpu:0'):
       flowingTensor = EncoderDecoderAttention_layer(xf, yf, seqLen)
       flowingTensor, weights, bias = FC_layer(flowingTensor)
+      flowingTensor = tf.nn.softmax(flowingTensor)
       flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
 
       epislon = 1e-8
-      cross_entropy = -(yf * tf.log(flowingTensor + epislon) + (1. - yf) * tf.log(1. - flowingTensor + epislon))
+      cross_entropy = -(yf * tf.math.log(flowingTensor + epislon) + (1. - yf) * tf.math.log(1. - flowingTensor + epislon))
       prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
-      L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
+      L2_regularized_loss = prediction_loss + ARGS.LregularizationAlpha * tf.nn.l2_loss(weights)
 
-      # optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
-      optimizer = tf.train.RMSPropOptimizer(learning_rate=ARGS.learningRate, decay=ARGS.decay, momentum=ARGS.momentum, epsilon=1e-10).minimize(L2_regularized_loss)
+      optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+      # optimizer = tf.train.AdamOptimizer(learning_rate=ARGS.learningRate, beta1=0.9, beta2=0.999, epsilon=1e-08, use_locking=False).minimize(L2_regularized_loss)
 
       # Bahdanau (855)
       # global_step = tf.Variable(0, trainable=False)
