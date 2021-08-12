@@ -201,11 +201,10 @@ def build_model():
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
 
     with tf.device('/gpu:0'):
-      maskf = tf.transpose(maskf, [1,0])
       flowingTensor = EncoderDecoderAttention_layer(xf, yf, seqLen)
       flowingTensor, weights, bias = FC_layer(flowingTensor)
-      flowingTensor = tf.nn.softmax(flowingTensor)
-      flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
+      flowingTensor = tf.nn.softmax(flowingTensor, name="predictions")
+      flowingTensor = flowingTensor * maskf[:,:,None]
 
       epislon = 1e-8
       cross_entropy = -(yf * tf.math.log(flowingTensor + epislon) + (1. - yf) * tf.math.log(1. - flowingTensor + epislon))
