@@ -286,9 +286,8 @@ def build_model():
 
     with tf.device('/gpu:0'):
       flowingTensor = EncoderDecoderAttention_layer(xf, yf, seqLen)
-      flowingTensor = tf.boolean_mask(flowingTensor, maskf) # 1, 100, 3133 e 5, 100
       flowingTensor, weights, bias = FC_layer(flowingTensor)
-      flowingTensor = tf.nn.softmax(flowingTensor, name="predictions")
+      flowingTensor = tf.nn.softmax(flowingTensor)
       flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
 
       epislon = 1e-8
