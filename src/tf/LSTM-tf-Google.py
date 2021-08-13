@@ -295,8 +295,9 @@ def build_model():
       prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
       L2_regularized_loss = prediction_loss + ARGS.LregularizationAlpha * tf.nn.l2_loss(weights)
 
-      optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+      # optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
       # optimizer = tf.train.AdamOptimizer(learning_rate=ARGS.learningRate, beta1=0.9, beta2=0.999, epsilon=1e-08, use_locking=False).minimize(L2_regularized_loss)
+      optimizer = tf.train.RMSPropOptimizer(learning_rate=ARGS.learningRate, decay=ARGS.decay, momentum=ARGS.momentum, epsilon=1e-10).minimize(L2_regularized_loss)
 
     return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
 
@@ -392,9 +393,9 @@ def parse_arguments():
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
-  parser.add_argument('--learningRate', type=float, default=0.5, help='Learning rate.')
-  parser.add_argument('--decay', type=float, default=0.5, help='Decay.')
-  parser.add_argument('--momentum', type=float, default=0.5, help='Momentum.')
+  parser.add_argument('--learningRate', type=float, default=0.0015, help='Learning rate.')
+  parser.add_argument('--decay', type=float, default=0.9, help='Decay.')
+  parser.add_argument('--momentum', type=float, default=0.1, help='Momentum.')
   # parser.add_argument('--globalStep', type=float, default=0, help='Global step.')
   # parser.add_argument('--decaySteps', type=float, default=1000, help='Decay steps.')
   # parser.add_argument('--decayRate', type=float, default=0.7, help='Decay rate.')
