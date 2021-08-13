@@ -27,7 +27,7 @@ def prepareHotVectors(train_tensor, labels_tensor):
 
   x_hotvectors_tensorf = np.zeros((maxNumberOfAdmissions, numberOfPatients, ARGS.numberOfInputCodes)).astype(np.float64)
   y_hotvectors_tensor = np.zeros((maxNumberOfAdmissions, numberOfPatients, ARGS.numberOfInputCodes)).astype(np.float64)
-  mask = np.zeros((maxNumberOfAdmissions, numberOfPatients)).astype(np.float64)
+  mask = np.zeros((maxNumberOfAdmissions, numberOfPatients, 1)).astype(np.float64)
 
   for idx, (train_patient_matrix,label_patient_matrix) in enumerate(zip(train_tensor, labels_tensor)):
     for i_th_visit, visit_line in enumerate(train_patient_matrix[:-1]): #ignores the last admission, which is not part of the training
@@ -36,7 +36,7 @@ def prepareHotVectors(train_tensor, labels_tensor):
     for i_th_visit, visit_line in enumerate(label_patient_matrix[1:]):  #label_matrix[1:] = all but the first admission slice, not used to evaluate (this is the answer)
       for code in visit_line:
         y_hotvectors_tensor[i_th_visit, idx, code] = 1
-    mask[:nVisitsOfEachPatient_List[idx], idx] = 1.
+    mask[:nVisitsOfEachPatient_List[idx], idx, 0] = 1.
 
   nVisitsOfEachPatient_List = np.array(nVisitsOfEachPatient_List, dtype=np.int32)
   return x_hotvectors_tensorf, y_hotvectors_tensor, mask, nVisitsOfEachPatient_List
@@ -281,14 +281,14 @@ def build_model():
   with graph.as_default():
     xf = tf.placeholder(tf.float32, [None, None, ARGS.numberOfInputCodes], name="inputs")
     yf = tf.placeholder(tf.float32, [None, None, ARGS.numberOfInputCodes], name="labels")
-    maskf = tf.placeholder(tf.float32, [None, None], name="mask")
+    maskf = tf.placeholder(tf.float32, [None, None, 1], name="mask")
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
 
     with tf.device('/gpu:0'):
       flowingTensor = EncoderDecoderAttention_layer(xf, yf, seqLen)
+      flowingTensor = tf.math.multiply(flowingTensor, maskf)
       flowingTensor, weights, bias = FC_layer(flowingTensor)
       flowingTensor = tf.nn.softmax(flowingTensor, name="predictions")
-      flowingTensor = flowingTensor * maskf[:,:,None]
 
       epislon = 1e-8
       cross_entropy = -(yf * tf.math.log(flowingTensor + epislon) + (1. - yf) * tf.math.log(1. - flowingTensor + epislon))
