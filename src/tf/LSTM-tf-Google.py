@@ -209,16 +209,16 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
   go_token = 2.
   end_token = 3.
 
-  go_tokens = tf.fill((1, tf.shape(inputTensor)[1], ARGS.numberOfInputCodes), go_token)
-  end_tokens = tf.fill((1, tf.shape(inputTensor)[1], ARGS.numberOfInputCodes), end_token)
-  dec_input = tf.concat([go_tokens, inputTensor], axis=0)
-  dec_input = tf.concat([dec_input, end_tokens], axis=1)
+  go_tokens = tf.fill((1, tf.shape(targetTensor)[0], ARGS.numberOfInputCodes), go_token)
+  end_tokens = tf.fill((1, tf.shape(targetTensor)[0], ARGS.numberOfInputCodes), end_token)
+  dec_input = tf.concat([go_tokens, targetTensor], axis=1)
+  dec_input = tf.concat([dec_input, end_tokens], axis=0)
   # dec_input = tf.concat([tf.strided_slice(dec_input, begin=[-1, 0, 0], end=[-1, tf.shape(dec_input)[1], ARGS.numberOfInputCodes], strides=[1,1,1]), end_tokens], axis=-1)
 
   with tf.variable_scope('decoder'):
     # Decoder
     dec_cell = decoderCell(encoder_outputs, seqLen)
-    init_state = dec_cell.zero_state(tf.shape(inputTensor)[0], tf.float32)
+    init_state = dec_cell.zero_state(tf.shape(targetTensor)[1], tf.float32)
     init_state = init_state.clone(cell_state=dec_start_state)
 
     helper = tf.contrib.seq2seq.TrainingHelper(inputs=dec_input, sequence_length=seqLen, time_major=False)
@@ -233,7 +233,7 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
   with tf.variable_scope('decoder', reuse=True):
     dec_cell = decoderCell(tiled_encoder_outputs, tiled_lengths)
     # init_state = dec_cell.zero_state(tf.shape(targetTensor)[0] * tf.shape(targetTensor)[1] * beam_width * beam_width//tf.shape(targetTensor)[0], tf.float32)
-    init_state = dec_cell.zero_state(tf.shape(inputTensor)[0] * ARGS.beamWidth, tf.float32)
+    init_state = dec_cell.zero_state(tf.shape(targetTensor)[1] * ARGS.beamWidth, tf.float32)
     init_state = init_state.clone(cell_state=tiled_start_state)
 
     go_token = tf.cast(go_token, dtype=tf.int32)
@@ -355,7 +355,7 @@ def train_model():
         if os.path.exists(bestModelDirName):
           shutil.rmtree(bestModelDirName)
 
-        signature = tf.saved_model.signature_def_utils.predict_signature_def(inputs= {"inputs": x, "mask": mask, "seqLen": seqLen}, outputs= {"predictions": predictions})
+        signature = tf.saved_model.signature_def_utils.predict_signature_def(inputs= {"inputs": x, "labels": y, "mask": mask, "seqLen": seqLen}, outputs= {"predictions": predictions})
         builder = tf.saved_model.builder.SavedModelBuilder(bestModelDirName)
         builder.add_meta_graph_and_variables(sess, [tf.saved_model.tag_constants.SERVING], signature_def_map={'model': signature})
         builder.save()
