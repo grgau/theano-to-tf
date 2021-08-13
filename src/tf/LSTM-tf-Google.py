@@ -83,7 +83,9 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
       xf, yf, maskf, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
 
       feed_dict = {x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List}
-      crossEntropy = sess.run(loss, feed_dict=feed_dict)
+
+      if xf.shape[0] <= 5:
+        crossEntropy = sess.run(loss, feed_dict=feed_dict)
 
       #accumulation by simple summation taking the batch size into account
       crossEntropySum += crossEntropy * len(batchX)
@@ -173,7 +175,9 @@ def train_model():
         xf += np.random.normal(0, 0.1, xf.shape)
 
         feed_dict = {x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List}
-        _, trainCrossEntropy = sess.run([optimizer, loss], feed_dict=feed_dict)
+
+        if xf.shape[0] <= 5:
+          _, trainCrossEntropy = sess.run([optimizer, loss], feed_dict=feed_dict)
 
         trainCrossEntropyVector.append(trainCrossEntropy)
         iteration += 1
