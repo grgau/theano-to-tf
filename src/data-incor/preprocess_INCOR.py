@@ -102,7 +102,7 @@ if __name__ == '__main__':
 		#sorts the hadm_ids according to date admttime
 		#only for the hadm_id in the list hadmList
 		#In InCor time is measured in days before the year 2020 - hence, ordering is reversed - bigger number of days, mean older records
-		sortedList = [(hadmTOadmttime_Map[hadm_id], hadmToactionIDCODEs_Map[hadm_id], hadm_id) for hadm_id in hadmList]
+		sortedList = sorted([(hadmTOadmttime_Map[hadm_id], hadmToactionIDCODEs_Map[hadm_id], hadm_id) for hadm_id in hadmList],reverse = True)
 		# each element in subjectTOorderedHADM_IDS_Map is a key-value (subject_id, (admittime, actionID_List, hadm_id))
 		subjectTOorderedHADM_IDS_Map[subject_id] = sortedList
 	print '-Number of discarded subjects with only one admission: ' + str(number_of_subjects_with_only_one_visit)
