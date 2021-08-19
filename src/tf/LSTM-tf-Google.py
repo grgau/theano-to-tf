@@ -361,7 +361,6 @@ def parse_arguments():
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
   parser.add_argument('--learningRate', type=float, default=0.5, help='Learning rate.')
   parser.add_argument('--dropoutRate', type=float, default=0.45, help='Dropout probability.')
-  parser.add_argument('--learningRate', type=float, default=0.5, help='Learning rate.')
 
 
   ARGStemp = parser.parse_args()
