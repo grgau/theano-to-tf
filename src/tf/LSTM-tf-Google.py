@@ -133,7 +133,7 @@ def EncoderDecoderBahdanau_layer(inputTensor, targetTensor, vocab, seqLen):
     dec_cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
 
     sampler = tfa.seq2seq.sampler.TrainingSampler(time_major=True)
-    sampler.initialize(sequence_length=seqLen)
+    sampler.initialize(inputs=inputTensor, sequence_length=seqLen)
     decoder = tfa.seq2seq.BasicDecoder(dec_cell, sampler=sampler)
 
     go_token = -1.
