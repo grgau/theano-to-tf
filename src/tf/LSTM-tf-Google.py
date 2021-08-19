@@ -231,16 +231,17 @@ def build_model():
     maskf = tf.placeholder(tf.float32, [None, None], name="mask")
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
 
-    flowingTensor = EncoderDecoderBahdanau_layer(xf, yf, df, seqLen)
-    flowingTensor, weights = FC_layer(flowingTensor)
-    flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
+    with tf.device('/gpu:0'):
+      flowingTensor = EncoderDecoderBahdanau_layer(xf, yf, df, seqLen)
+      flowingTensor, weights = FC_layer(flowingTensor)
+      flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
 
-    epislon = 1e-8
-    cross_entropy = -(yf * tf.log(flowingTensor + epislon) + (1. - yf) * tf.log(1. - flowingTensor + epislon))
-    prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
-    L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
+      epislon = 1e-8
+      cross_entropy = -(yf * tf.log(flowingTensor + epislon) + (1. - yf) * tf.log(1. - flowingTensor + epislon))
+      prediction_loss = tf.math.reduce_mean(tf.math.reduce_sum(cross_entropy, axis=[2, 0]) / seqLen)
+      L2_regularized_loss = prediction_loss + tf.math.reduce_sum(ARGS.LregularizationAlpha * (weights ** 2))
 
-    optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
+      optimizer = tf.train.AdadeltaOptimizer(learning_rate=ARGS.learningRate, rho=0.95, epsilon=1e-06).minimize(L2_regularized_loss)
 
     # Bahdanau (855)
     # global_step = tf.Variable(0, trainable=False)
@@ -278,7 +279,7 @@ def train_model():
   iConsecutiveNonImprovements = 0
   epoch_counter = 0
 
-  with tf.Session(graph=graph) as sess:
+  with tf.Session(graph=graph, config=tf.ConfigProto(allow_soft_placement=True)) as sess:
     sess.run(init)
 
     for epoch_counter in range(ARGS.nEpochs):
