@@ -93,7 +93,9 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
       # yf = np.concatenate([yf, end_token], axis=-1)
 
       feed_dict = {x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List}
-      crossEntropy = sess.run(loss, feed_dict=feed_dict)
+
+      if xf.shape[0] <= 5:
+        crossEntropy = sess.run(loss, feed_dict=feed_dict)
 
       #accumulation by simple summation taking the batch size into account
       crossEntropySum += crossEntropy * len(batchX)
@@ -300,7 +302,9 @@ def train_model():
         # yf = np.concatenate([yf, end_token], axis=-1)
 
         feed_dict = {x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List}
-        _, trainCrossEntropy = sess.run([optimizer, loss], feed_dict=feed_dict)
+
+        if xf.shape[0] <= 5:
+          _, trainCrossEntropy = sess.run([optimizer, loss], feed_dict=feed_dict)
 
         trainCrossEntropyVector.append(trainCrossEntropy)
         iteration += 1
@@ -357,6 +361,7 @@ def parse_arguments():
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
   parser.add_argument('--learningRate', type=float, default=0.5, help='Learning rate.')
   parser.add_argument('--dropoutRate', type=float, default=0.45, help='Dropout probability.')
+
 
   ARGStemp = parser.parse_args()
   hiddenDimSize = [int(strDim) for strDim in ARGStemp.hiddenDimSize[1:-1].split(',')]
