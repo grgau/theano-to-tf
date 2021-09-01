@@ -252,7 +252,7 @@ def load_data():
 def performEvaluation(TEST_MODEL_COMPILED, test_Set):
 	batchSize = ARGS.batchSize
 
-	n_batches = int(np.ceil(float(len(test_Set[0])) / float(batchSize))) #default batch size is 100
+	n_batches = int(np.ceil(float(len(test_Set)) / float(batchSize))) #default batch size is 100
 	crossEntropySum = 0.0
 	dataCount = 0.0
 	#computes de crossEntropy for all the elements in the test_Set, using the batch scheme of partitioning
