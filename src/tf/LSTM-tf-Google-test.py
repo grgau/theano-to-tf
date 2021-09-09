@@ -276,7 +276,7 @@ if __name__ == '__main__':
   ARGS = parse_arguments()
   print(ARGS)
 
-  wandb.run.name = ARGS.runName + ARGS.hiddenDimSize + "-" + ARGS.attentionDimSize
+  wandb.run.name = ARGS.runName + ARGS.hiddenDimSize + "-" + str(ARGS.attentionDimSize)
 
   patients, predictions = testModel()
 
