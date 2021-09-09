@@ -3,6 +3,7 @@ import argparse
 import tensorflow as tf
 import numpy as np
 from sklearn import metrics
+import wandb
 
 import csv
 from itertools import count
@@ -10,6 +11,8 @@ from itertools import count
 tf.contrib.resampler
 
 global ARGS
+
+run = wandb.init(project="enc-dec-att", reinit=True)
 
 def prepareHotVectors(test_tensor, labels_tensor):
   n_visits_of_each_patientList = np.array([len(seq) for seq in test_tensor]) - 1
@@ -234,6 +237,24 @@ def testModel():
     print('Recall: ' + str(PRResults[1]))
     print('Binary F1 Score: ' + str(PRResults[2]))  # FBeta score with beta = 1.0
     print('Support: ' + str(PRResults[3]))
+
+    wandb.log({ 'Recall@10': str(finalRecalls[0]),
+                'Recall@20': str(finalRecalls[1]),
+                'Recall@30': str(finalRecalls[2]),
+                'Precision@1': str(finalPrecisions[0]),
+                'Precision@2': str(finalPrecisions[1]),
+                'Precision@3': str(finalPrecisions[2]),
+                'AUC-ROC': str(metrics.roc_auc_score(fullListOfTrueYOutcomeForAUCROCAndPR_list,
+                                                                 fullListOfPredictedYProbsForAUCROC_list,
+                                                                 average='weighted')),
+                'Precision': str(PRResults[0]),
+                'Recall': str(PRResults[1]),
+                'F1 Score': str(PRResults[2]),
+                'Suport': str(PRResults[3]),
+                '_hiddenDimSize': str(ARGS.hiddenDimSize),
+                '_attentionDimSize': str(ARGS.attentionDimSize)})
+    run.finish()
+
   sess.close()
   return patientsSet, predicted_yList
 
@@ -243,6 +264,9 @@ def parse_arguments():
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .test file) with pickled data organized as patient x admission x codes.')
   parser.add_argument('modelPath', type=str, metavar='<model_path>', help='The path to the model directory')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
+  parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Hidden dimension sizes (only for saving on wandb')
+  parser.add_argument('--attentionDimSize', type=int, default=5, help='Number of attention layer dense units')
+
   ARGStemp = parser.parse_args()
   return ARGStemp
 
@@ -250,6 +274,8 @@ if __name__ == '__main__':
   global ARGS
   ARGS = parse_arguments()
   print(ARGS)
+
+  wandb.run.name = ARGS.runName + ARGS.hiddenDimSize + "-" + ARGS.attentionDimSize
 
   patients, predictions = testModel()
 
