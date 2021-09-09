@@ -266,6 +266,7 @@ def parse_arguments():
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
   parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Hidden dimension sizes (only for saving on wandb')
   parser.add_argument('--attentionDimSize', type=int, default=5, help='Number of attention layer dense units')
+  parser.add_argument('--runName', type=str, default="MIMIC_", help='WandB run name.')
 
   ARGStemp = parser.parse_args()
   return ARGStemp
