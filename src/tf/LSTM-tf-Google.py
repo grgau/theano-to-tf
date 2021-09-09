@@ -375,7 +375,7 @@ def train_model():
     print('Note: the smaller the cross entropy, the better.')
     print('-----------------------------------')
 
-    testModel(sess, predictions, x, y, mask, seqLen, testSet)
+    # testModel(sess, predictions, x, y, mask, seqLen, testSet)
 
     sess.close()
 
