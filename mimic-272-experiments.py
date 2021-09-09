@@ -6,7 +6,7 @@ for r in range(5):
   # cell [271]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=5 --hiddenDimSize=[271]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[271] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=5 --hiddenDimSize=[271] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + 'encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -17,7 +17,7 @@ for r in range(5):
   # cell [271, 271]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=5 --hiddenDimSize=[271,271]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[271,271] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=5 --hiddenDimSize=[271,271] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -28,7 +28,7 @@ for r in range(5):
   # cell [271, 271, 271]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=5 --hiddenDimSize=[271,271,271]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[271,271,271] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=5 --hiddenDimSize=[271,271,271] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -39,7 +39,7 @@ for r in range(5):
   # cell [542]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=5 --hiddenDimSize=[542]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[542] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=5 --hiddenDimSize=[542] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -50,7 +50,7 @@ for r in range(5):
   # cell [542, 542]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=5 --hiddenDimSize=[542,542]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[542,542] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=5 --hiddenDimSize=[542,542] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -61,7 +61,7 @@ for r in range(5):
   # cell [542, 542, 542]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=5 --hiddenDimSize=[542,542,542]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[542,542,542] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=5 --hiddenDimSize=[542,542,542] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -72,7 +72,7 @@ for r in range(5):
   # cell [1084]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=5 --hiddenDimSize=[1084]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[1084] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=5 --hiddenDimSize=[1084] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -83,7 +83,7 @@ for r in range(5):
   # cell [1084, 1084]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=5 --hiddenDimSize=[1084,1084]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[1084,1084] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=5 --hiddenDimSize=[1084,1084] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -94,7 +94,7 @@ for r in range(5):
   # cell [1084, 1084, 1084]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=5 --hiddenDimSize=[1084,1084,1084]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[1084,1084,1084] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=5 --hiddenDimSize=[1084,1084,1084] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -107,7 +107,7 @@ for r in range(5):
   # cell [271]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=10 --hiddenDimSize=[271]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[271] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=10 --hiddenDimSize=[271] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + 'encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -118,7 +118,7 @@ for r in range(5):
   # cell [271, 271]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=10 --hiddenDimSize=[271,271]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[271,271] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=10 --hiddenDimSize=[271,271] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -129,7 +129,7 @@ for r in range(5):
   # cell [271, 271, 271]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=10 --hiddenDimSize=[271,271,271]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[271,271,271] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=10 --hiddenDimSize=[271,271,271] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -140,7 +140,7 @@ for r in range(5):
   # cell [542]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=10 --hiddenDimSize=[542]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[542] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=10 --hiddenDimSize=[542] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -151,7 +151,7 @@ for r in range(5):
   # cell [542, 542]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=10 --hiddenDimSize=[542,542]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[542,542] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=10 --hiddenDimSize=[542,542] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -162,7 +162,7 @@ for r in range(5):
   # cell [542, 542, 542]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=10 --hiddenDimSize=[542,542,542]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[542,542,542] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=10 --hiddenDimSize=[542,542,542] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -173,7 +173,7 @@ for r in range(5):
   # cell [1084]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=10 --hiddenDimSize=[1084]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[1084] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=10 --hiddenDimSize=[1084] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -184,7 +184,7 @@ for r in range(5):
   # cell [1084, 1084]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=10 --hiddenDimSize=[1084,1084]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[1084,1084] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=10 --hiddenDimSize=[1084,1084] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -195,7 +195,7 @@ for r in range(5):
   # cell [1084, 1084, 1084]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=10 --hiddenDimSize=[1084,1084,1084]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[1084,1084,1084] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=10 --hiddenDimSize=[1084,1084,1084] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -208,7 +208,7 @@ for r in range(5):
   # cell [271]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=15 --hiddenDimSize=[271]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[271] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=15 --hiddenDimSize=[271] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + 'encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -219,7 +219,7 @@ for r in range(5):
   # cell [271, 271]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=15 --hiddenDimSize=[271,271]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[271,271] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=15 --hiddenDimSize=[271,271] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -230,7 +230,7 @@ for r in range(5):
   # cell [271, 271, 271]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=15 --hiddenDimSize=[271,271,271]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[271,271,271] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=15 --hiddenDimSize=[271,271,271] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -241,7 +241,7 @@ for r in range(5):
   # cell [542]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=15 --hiddenDimSize=[542]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[542] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=15 --hiddenDimSize=[542] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -252,7 +252,7 @@ for r in range(5):
   # cell [542, 542]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=15 --hiddenDimSize=[542,542]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[542,542] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=15 --hiddenDimSize=[542,542] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -263,7 +263,7 @@ for r in range(5):
   # cell [542, 542, 542]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=15 --hiddenDimSize=[542,542,542]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[542,542,542] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=15 --hiddenDimSize=[542,542,542] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -274,7 +274,7 @@ for r in range(5):
   # cell [1084]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=15 --hiddenDimSize=[1084]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[1084] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=15 --hiddenDimSize=[1084] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -285,7 +285,7 @@ for r in range(5):
   # cell [1084, 1084]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=15 --hiddenDimSize=[1084,1084]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[1084,1084] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=15 --hiddenDimSize=[1084,1084] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
@@ -296,7 +296,7 @@ for r in range(5):
   # cell [1084, 1084, 1084]
   stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272" compiled_models/272-encdec-model --attentionDimSize=15 --hiddenDimSize=[1084,1084,1084]', shell=True)
   best_model = stdout.decode().split("\n")[-5].split(" ")[-1]
-  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --hiddenDimSize=[1084,1084,1084] --runName=Att_c-MIMIC-272_', shell=True)
+  stdout = subprocess.check_output('python3.7 src/tf/LSTM-tf-Google-test.py "../clinical-prediction/data/mimic-iii/ccs/mimic_90-10_272"' + " \"" + best_model + "\"" + ' --attentionDimSize=15 --hiddenDimSize=[1084,1084,1084] --runName=Att_c-MIMIC-272_', shell=True)
 
   with open(str(r) + '_encdec-mimic-272-experiments.txt', 'a') as f:
     with redirect_stdout(f):
