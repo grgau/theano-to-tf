@@ -100,13 +100,13 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set, alignments_st
       crossEntropy = sess.run(loss, feed_dict=feed_dict)
       alignments = sess.run(alignments_states, feed_dict=feed_dict)
 
-      if alignments[0].shape[-1] >= 2 and alignments[0].shape[-1] <= 20:
+      if alignments[0].shape[-1] >= 1 and alignments[0].shape[-1] <= 10:
         alignments_list2.extend(alignments[0].tolist())
 
-      if alignments[0].shape[-1] >= 21 and alignments[0].shape[-1] <= 40:
+      if alignments[0].shape[-1] >= 10 and alignments[0].shape[-1] <= 20:
         alignments_list5.extend(alignments[0].tolist())
 
-      if alignments[0].shape[-1] > 40:
+      if alignments[0].shape[-1] > 20:
         alignments_list10.extend(alignments[0].tolist())
 
       #accumulation by simple summation taking the batch size into account
@@ -405,17 +405,23 @@ def train_model():
     # testModel(sess, predictions, x, y, mask, seqLen, testSet)
 
     if bestAlignments2 is not None:
-      plt.plot(bestAlignments2, label='Up to 20 admissions')
+      plt.plot(bestAlignments2, "darkorange", label='Up to 10 admissions')
     if bestAlignments5 is not None:
-      plt.plot(bestAlignments5, label='21 to 40 admissions')
+      plt.plot(bestAlignments5, "indigo", label='11 to 20 admissions')
     if bestAlignments10 is not None:
-      plt.plot(bestAlignments10, label='More than 40 admissions')
+      plt.plot(bestAlignments10, "seagreen", label='More than 20 admissions')
     
-    plt.xticks(range(0,len(bestAlignments10)))
+    # plt.xticks(range(0,len(bestAlignments10)))
+    plt.gca().xaxis.grid(True)
     plt.xticks(rotation=45)
     plt.legend()
-    plt.tick_params(axis='x', which='major', labelsize=5)
+    # plt.tick_params(axis='x', which='major', labelsize=5)
+    plt.locator_params(axis="x", nbins=20)
     plt.savefig('alignments.png')
+    plt.ylabel("Alignment Score")
+    plt.xlabel("Number of Admissions")
+
+    # plt.show()
 
     sess.close()
 
@@ -431,7 +437,7 @@ def parse_arguments():
   parser.add_argument('--maxDecoderIterations', type=int, default=1, help='Maximum Inference Decoder iterations over predicted data')
   parser.add_argument('--beamWidth', type=int, default=1, help='Beam width size')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
-  parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
+  parser.add_argument('--nEpochs', type=int, default=1, help='Number of training iterations.')
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
   parser.add_argument('--learningRate', type=float, default=0.001, help='Learning rate.')
   parser.add_argument('--decay', type=float, default=0.9, help='Decay.')
