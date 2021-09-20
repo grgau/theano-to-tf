@@ -100,7 +100,7 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set, alignments_st
       crossEntropy = sess.run(loss, feed_dict=feed_dict)
       alignments = sess.run(alignments_states, feed_dict=feed_dict)
 
-      if alignments[0].shape[-1] >= 1 and alignments[0].shape[-1] <= 10:
+      if alignments[0].shape[-1] >= 2 and alignments[0].shape[-1] <= 10:
         alignments_list2.extend(alignments[0].tolist())
 
       if alignments[0].shape[-1] >= 10 and alignments[0].shape[-1] <= 20:
@@ -393,12 +393,15 @@ def train_model():
     print('Note: the smaller the cross entropy, the better.')
     print('-----------------------------------')
     
+    bestAlignments[0].insert(0,0)
     bestAlignments2 = np.array(list(zip_longest(*bestAlignments[0], fillvalue=0))).T
     bestAlignments2 = np.mean(bestAlignments2, axis=0)
 
+    bestAlignments[1].insert(0,0)
     bestAlignments5 = np.array(list(zip_longest(*bestAlignments[1], fillvalue=0))).T
     bestAlignments5 = np.mean(bestAlignments5, axis=0)
 
+    bestAlignments[2].insert(0,0)
     bestAlignments10 = np.array(list(zip_longest(*bestAlignments[2], fillvalue=0))).T
     bestAlignments10 = np.mean(bestAlignments10, axis=0)
 
@@ -417,9 +420,9 @@ def train_model():
     plt.legend()
     # plt.tick_params(axis='x', which='major', labelsize=5)
     plt.locator_params(axis="x", nbins=20)
-    plt.savefig('alignments.png')
     plt.ylabel("Alignment Score")
     plt.xlabel("Number of Admissions")
+    plt.savefig('alignments.png', dpi=300)
 
     # plt.show()
 
