@@ -415,7 +415,7 @@ def train_model():
     plt.xticks(rotation=45)
     plt.legend()
     plt.tick_params(axis='x', which='major', labelsize=5)
-    plt.show()
+    plt.savefig('alignments.png')
 
     sess.close()
 
