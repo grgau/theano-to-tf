@@ -437,7 +437,7 @@ def parse_arguments():
   parser.add_argument('--maxDecoderIterations', type=int, default=1, help='Maximum Inference Decoder iterations over predicted data')
   parser.add_argument('--beamWidth', type=int, default=1, help='Beam width size')
   parser.add_argument('--batchSize', type=int, default=100, help='Batch size.')
-  parser.add_argument('--nEpochs', type=int, default=1, help='Number of training iterations.')
+  parser.add_argument('--nEpochs', type=int, default=1000, help='Number of training iterations.')
   parser.add_argument('--LregularizationAlpha', type=float, default=0.001, help='Alpha regularization for L2 normalization')
   parser.add_argument('--learningRate', type=float, default=0.001, help='Learning rate.')
   parser.add_argument('--decay', type=float, default=0.9, help='Decay.')
