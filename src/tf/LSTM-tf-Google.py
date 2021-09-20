@@ -6,6 +6,8 @@ import random
 
 import tensorflow as tf
 import numpy as np
+from itertools import zip_longest
+from matplotlib import pyplot as plt
 
 global ARGS
 
@@ -69,10 +71,13 @@ def load_data():
 
   return trainSet, testSet
 
-def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
+def performEvaluation(session, loss, x, y, mask, seqLen, test_Set, alignments_states):
   batchSize = ARGS.batchSize
 
   n_batches = int(np.ceil(float(len(test_Set[0])) / float(batchSize))) #default batch size is 100
+  alignments_list2 = []
+  alignments_list5 = []
+  alignments_list10 = []
   crossEntropySum = 0.0
   dataCount = 0.0
   #computes de crossEntropy for all the elements in the test_Set, using the batch scheme of partitioning
@@ -93,12 +98,22 @@ def performEvaluation(session, loss, x, y, mask, seqLen, test_Set):
 
       feed_dict = {x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List}
       crossEntropy = sess.run(loss, feed_dict=feed_dict)
+      alignments = sess.run(alignments_states, feed_dict=feed_dict)
+
+      if alignments[0].shape[-1] >= 2 and alignments[0].shape[-1] <= 20:
+        alignments_list2.extend(alignments[0].tolist())
+
+      if alignments[0].shape[-1] >= 21 and alignments[0].shape[-1] <= 40:
+        alignments_list5.extend(alignments[0].tolist())
+
+      if alignments[0].shape[-1] > 40:
+        alignments_list10.extend(alignments[0].tolist())
 
       #accumulation by simple summation taking the batch size into account
       crossEntropySum += crossEntropy * len(batchX)
       dataCount += float(len(batchX))
       #At the end, it returns the mean cross entropy considering all the batches
-  return n_batches, crossEntropySum / dataCount
+  return n_batches, crossEntropySum / dataCount, [alignments_list2, alignments_list5, alignments_list10]
 
 def testModel(session, predictions, x, y, mask, seqLen, test_Set):
   batchSize = ARGS.batchSize
@@ -186,12 +201,12 @@ def testModel(session, predictions, x, y, mask, seqLen, test_Set):
 
 def decoderCell(inputs, lengths):
   # inputs = tf.transpose(inputs, [1,0,2])
-  attention_mechanism = tf.contrib.seq2seq.BahdanauMonotonicAttention(ARGS.attentionDimSize, memory=inputs, memory_sequence_length=lengths, normalize=True)
+  attention_mechanism = tf.contrib.seq2seq.BahdanauMonotonicAttention(ARGS.attentionDimSize, memory=inputs, memory_sequence_length=lengths)
 
   lstms = [tf.nn.rnn_cell.LSTMCell(size) for size in ARGS.hiddenDimSize]  # According to docs (https://www.tensorflow.org/api_docs/python/tf/compat/v1/nn/rnn_cell/LSTMCell), the peephole version is based on LSTM Google (2014)
   lstms = [tf.nn.rnn_cell.DropoutWrapper(lstm, output_keep_prob=(1-ARGS.dropoutRate)) for lstm in lstms]
   dec_cell = tf.nn.rnn_cell.MultiRNNCell(lstms)
-  dec_cell = tf.contrib.seq2seq.AttentionWrapper(dec_cell, attention_mechanism)
+  dec_cell = tf.contrib.seq2seq.AttentionWrapper(dec_cell, attention_mechanism, alignment_history=True)
   return dec_cell
 
 def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
@@ -209,10 +224,10 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
   go_token = 2.
   end_token = 3.
 
-  go_tokens = tf.fill((1, tf.shape(targetTensor)[0], ARGS.numberOfInputCodes), go_token)
-  end_tokens = tf.fill((1, tf.shape(targetTensor)[0], ARGS.numberOfInputCodes), end_token)
-  dec_input = tf.concat([go_tokens, targetTensor], axis=1)
-  dec_input = tf.concat([dec_input, end_tokens], axis=0)
+  # go_tokens = tf.fill((1, tf.shape(targetTensor)[0], ARGS.numberOfInputCodes), go_token)
+  # end_tokens = tf.fill((tf.shape(targetTensor)[0], tf.shape(targetTensor)[1], ARGS.numberOfInputCodes), end_token)
+  # dec_input = tf.concat([go_tokens, targetTensor], axis=1)
+  # dec_input = tf.concat([targetTensor, end_tokens], axis=1)
   # dec_input = tf.concat([tf.strided_slice(dec_input, begin=[-1, 0, 0], end=[-1, tf.shape(dec_input)[1], ARGS.numberOfInputCodes], strides=[1,1,1]), end_tokens], axis=-1)
 
   with tf.variable_scope('decoder'):
@@ -221,10 +236,10 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
     init_state = dec_cell.zero_state(tf.shape(targetTensor)[1], tf.float32)
     init_state = init_state.clone(cell_state=dec_start_state)
 
-    helper = tf.contrib.seq2seq.TrainingHelper(inputs=dec_input, sequence_length=seqLen, time_major=False)
+    helper = tf.contrib.seq2seq.TrainingHelper(inputs=targetTensor, sequence_length=seqLen, time_major=False)
     decoder = tf.contrib.seq2seq.BasicDecoder(cell=dec_cell, helper=helper, initial_state=init_state)
 
-    training_outputs, training_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=decoder, output_time_major=False)
+    training_outputs, training_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=decoder, output_time_major=False, training=True)
 
   tiled_start_state = tf.contrib.seq2seq.tile_batch(dec_start_state, multiplier=ARGS.beamWidth)
   tiled_encoder_outputs = tf.contrib.seq2seq.tile_batch(encoder_outputs, multiplier=ARGS.beamWidth)
@@ -247,11 +262,12 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
       initial_state=init_state,
       beam_width=ARGS.beamWidth)
 
-    inference_outputs, inference_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=inference_decoder, output_time_major=False, maximum_iterations=ARGS.maxDecoderIterations)
+    inference_outputs, inference_state, _ = tf.contrib.seq2seq.dynamic_decode(decoder=inference_decoder, output_time_major=False, maximum_iterations=ARGS.maxDecoderIterations, training=False)
 
   if ARGS.state == "cell":
-    inference_outputs = tf.transpose(inference_state.cell_state.cell_state[-1].c, [1,0,2])
-    # inference_outputs = inference_state.cell_state.cell_state[-1].c
+    # inference_outputs = tf.transpose(inference_state.cell_state.cell_state[-1].c, [1,0,2])
+    inference_outputs = tf.transpose(inference_state[0].attention, [1,0,2])
+    # inference_outputs = tf.transpose(inference_state[0].cell_state[-1].c, [1,0,2])
   elif ARGS.state == "hidden":
     inference_outputs = tf.transpose(inference_state.cell_state.cell_state[-1].h, [1,0,2])
   elif ARGS.state == "attention":
@@ -259,7 +275,7 @@ def EncoderDecoderAttention_layer(inputTensor, targetTensor, seqLen):
   else:
     inference_outputs = tf.cast(inference_outputs.predicted_ids, tf.float32)
 
-  return inference_outputs
+  return inference_outputs, inference_state[0].alignment_history
 
 
 def FC_layer(inputTensor):
@@ -285,7 +301,7 @@ def build_model():
     seqLen = tf.placeholder(tf.float32, [None], name="nVisitsOfEachPatient_List")
 
     with tf.device('/gpu:0'):
-      flowingTensor = EncoderDecoderAttention_layer(xf, yf, seqLen)
+      flowingTensor, alignments_states = EncoderDecoderAttention_layer(xf, yf, seqLen)
       flowingTensor, weights, bias = FC_layer(flowingTensor)
       flowingTensor = tf.nn.softmax(flowingTensor)
       flowingTensor = tf.math.multiply(flowingTensor, maskf[:,:,None], name="predictions")
@@ -299,19 +315,20 @@ def build_model():
       # optimizer = tf.train.AdamOptimizer(learning_rate=ARGS.learningRate, beta1=0.9, beta2=0.999, epsilon=1e-08, use_locking=False).minimize(L2_regularized_loss)
       optimizer = tf.train.RMSPropOptimizer(learning_rate=ARGS.learningRate, decay=ARGS.decay, momentum=ARGS.momentum, epsilon=1e-10).minimize(L2_regularized_loss)
 
-    return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor
+    return tf.global_variables_initializer(), graph, optimizer, L2_regularized_loss, xf, yf, maskf, seqLen, flowingTensor, alignments_states
 
 def train_model():
   print("==> data loading")
   trainSet, testSet = load_data()
 
   print("==> model building")
-  init, graph, optimizer, loss, x, y, mask, seqLen, predictions = build_model()
+  init, graph, optimizer, loss, x, y, mask, seqLen, predictions, alignments_states = build_model()
 
   print ("==> training and validation")
   batchSize = ARGS.batchSize
   n_batches = int(np.ceil(float(len(trainSet[0])) / float(batchSize)))
 
+  bestAlignments = []
   bestValidationCrossEntropy = 1e20
   bestValidationEpoch = 0
   bestModelDirName = ''
@@ -339,7 +356,7 @@ def train_model():
         iteration += 1
 
       print('-> Epoch: %d, mean cross entropy considering %d TRAINING batches: %f' % (epoch_counter, n_batches, np.mean(trainCrossEntropyVector)))
-      nValidBatches, validationCrossEntropy = performEvaluation(sess, loss, x, y, mask, seqLen, testSet)
+      nValidBatches, validationCrossEntropy, testAlignments = performEvaluation(sess, loss, x, y, mask, seqLen, testSet, alignments_states)
       print('      mean cross entropy considering %d VALIDATION batches: %f' % (nValidBatches, validationCrossEntropy))
 
       if validationCrossEntropy < bestValidationCrossEntropy:
@@ -359,6 +376,7 @@ def train_model():
         builder = tf.saved_model.builder.SavedModelBuilder(bestModelDirName)
         builder.add_meta_graph_and_variables(sess, [tf.saved_model.tag_constants.SERVING], signature_def_map={'model': signature})
         builder.save()
+        bestAlignments = testAlignments
 
       else:
         print('Epoch ended without improvement.')
@@ -374,8 +392,30 @@ def train_model():
     print('Number of improvement epochs: ' + str(iImprovementEpochs) + ' out of ' + str(epoch_counter + 1) + ' possible improvements.')
     print('Note: the smaller the cross entropy, the better.')
     print('-----------------------------------')
+    
+    bestAlignments2 = np.array(list(zip_longest(*bestAlignments[0], fillvalue=0))).T
+    bestAlignments2 = np.mean(bestAlignments2, axis=0)
+
+    bestAlignments5 = np.array(list(zip_longest(*bestAlignments[1], fillvalue=0))).T
+    bestAlignments5 = np.mean(bestAlignments5, axis=0)
+
+    bestAlignments10 = np.array(list(zip_longest(*bestAlignments[2], fillvalue=0))).T
+    bestAlignments10 = np.mean(bestAlignments10, axis=0)
 
     # testModel(sess, predictions, x, y, mask, seqLen, testSet)
+
+    if bestAlignments2 is not None:
+      plt.plot(bestAlignments2, label='Up to 20 admissions')
+    if bestAlignments5 is not None:
+      plt.plot(bestAlignments5, label='21 to 40 admissions')
+    if bestAlignments10 is not None:
+      plt.plot(bestAlignments10, label='More than 40 admissions')
+    
+    plt.xticks(range(0,len(bestAlignments10)))
+    plt.xticks(rotation=45)
+    plt.legend()
+    plt.tick_params(axis='x', which='major', labelsize=5)
+    plt.show()
 
     sess.close()
 
