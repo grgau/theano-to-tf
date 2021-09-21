@@ -414,11 +414,11 @@ def train_model():
     # testModel(sess, predictions, x, y, mask, seqLen, testSet)
 
     if bestAlignments2 is not None:
-      plt.plot(bestAlignments2, "darkorange", label='Up to 10 admissions')
+      plt.plot(bestAlignments2, "darkorange", label='2 to 10 admissions')
     if bestAlignments5 is not None:
-      plt.plot(bestAlignments5, "indigo", label='11 to 20 admissions')
+      plt.plot(bestAlignments5, "indigo", label='2 to 11 to 2 to 20 admissions')
     if bestAlignments10 is not None:
-      plt.plot(bestAlignments10, "seagreen", label='More than 20 admissions')
+      plt.plot(bestAlignments10, "seagreen", label='2 to more than 20 admissions')
     
     # plt.xticks(range(0,len(bestAlignments10)))
     plt.gca().xaxis.grid(True)
@@ -429,7 +429,7 @@ def train_model():
     plt.xlim(xmin=0)
     plt.ylim(ymin=0)
     plt.ylabel("Alignment Score")
-    plt.xlabel("Number of Admissions")
+    plt.xlabel("Amount of Admissions")
     plt.savefig('alignments.png', dpi=300, bbox_inches="tight")
 
     # plt.show()
