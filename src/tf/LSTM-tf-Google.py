@@ -7,7 +7,7 @@ import random
 import tensorflow as tf
 import numpy as np
 from itertools import zip_longest
-from matplotlib import pyplot as plt
+# from matplotlib import pyplot as plt
 
 global ARGS
 
@@ -393,6 +393,9 @@ def train_model():
     print('Note: the smaller the cross entropy, the better.')
     print('-----------------------------------')
     
+    sess.close()
+    return
+
     for array in bestAlignments[0]:
       array.insert(0,0)
 
@@ -434,15 +437,12 @@ def train_model():
 
     # plt.show()
 
-    sess.close()
-
-
 def parse_arguments():
   parser = argparse.ArgumentParser()
   parser.add_argument('inputFileRadical', type=str, metavar='<visit_file>', help='File radical name (the software will look for .train and .test files) with pickled data organized as patient x admission x codes.')
   parser.add_argument('outFile', metavar='out_file', default='model_output', help='Any file directory to store the model.')
   parser.add_argument('--maxConsecutiveNonImprovements', type=int, default=10, help='Training wiil run until reaching the maximum number of epochs without improvement before stopping the training')
-  parser.add_argument('--hiddenDimSize', type=str, default='[271]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
+  parser.add_argument('--hiddenDimSize', type=str, default='[542]', help='Number of layers and their size - for example [100,200] refers to two layers with 100 and 200 nodes.')
   parser.add_argument('--state', type=str, default='cell', help='Pass cell, hidden or attention to fully connected layer')
   parser.add_argument('--attentionDimSize', type=int, default=5, help='Number of attention layer dense units')
   parser.add_argument('--maxDecoderIterations', type=int, default=1, help='Maximum Inference Decoder iterations over predicted data')

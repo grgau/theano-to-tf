@@ -3,7 +3,7 @@ import argparse
 import tensorflow as tf
 import numpy as np
 from sklearn import metrics
-import wandb
+# import wandb
 
 import csv
 from itertools import count
@@ -50,12 +50,19 @@ def loadModel():
     ARGS.numberOfInputCodes = x.get_shape()[-1]
     return sess, predictions, x, y, mask, seqLen
 
-def load_patients():
-  return np.array(pickle.load(open(ARGS.inputFileRadical+'.map.test', 'rb')))
-
 def load_data():
   testSet_x = np.array(pickle.load(open(ARGS.inputFileRadical+'.test', 'rb')))
   testSet_y = np.array(pickle.load(open(ARGS.inputFileRadical+'.test', 'rb')))
+  patients = np.array(pickle.load(open(ARGS.inputFileRadical+'.map.test', 'rb')))
+
+  # For 100% of dataset
+  trainSet_x = np.array(pickle.load(open(ARGS.inputFileRadical+'.train', 'rb')))
+  trainSet_y = np.array(pickle.load(open(ARGS.inputFileRadical+'.train', 'rb')))
+  patients_train = np.array(pickle.load(open(ARGS.inputFileRadical+'.map.train', 'rb')))
+
+  testSet_x = np.concatenate((testSet_x,trainSet_x))
+  testSet_y = np.concatenate((testSet_y,trainSet_y))
+  patients = np.concatenate((patients,patients_train))
 
   def len_argsort(seq):
     return sorted(range(len(seq)), key=lambda x: len(seq[x]))
@@ -63,19 +70,62 @@ def load_data():
   sorted_index = len_argsort(testSet_x)
   testSet_x = [testSet_x[i] for i in sorted_index]
   testSet_y = [testSet_y[i] for i in sorted_index]
+  patients = [patients[i] for i in sorted_index]
 
   testSet = [testSet_x, testSet_y]
-  return testSet
+  return testSet, patients
 
-def testModel():
+def predict():
   print('==> model loading')
   session, predictions, x, y, mask, seqLen = loadModel()
 
   print('==> data loading')
   testSet = load_data()
 
-  print ('==> load patients')
-  patientsSet = load_patients()
+  batchIndex = 7
+  actualY_list = []
+  selected_patient_index = 42
+
+  with session as sess:
+    batchX = testSet[0][batchIndex * ARGS.batchSize: (batchIndex + 1) * ARGS.batchSize]
+    batchY = testSet[1][batchIndex * ARGS.batchSize: (batchIndex + 1) * ARGS.batchSize]
+    xf, yf, maskf, nVisitsOfEachPatient_List = prepareHotVectors(batchX, batchY)
+    
+    xf = xf[:,selected_patient_index:selected_patient_index+1,:]
+    yf = yf[:,selected_patient_index:selected_patient_index+1,:]
+    maskf = maskf[:,selected_patient_index:selected_patient_index+1]
+    nVisitsOfEachPatient_List = nVisitsOfEachPatient_List[selected_patient_index:selected_patient_index+1]
+    maxNumberOfAdmissions = np.max(nVisitsOfEachPatient_List)
+
+    predicted_y = sess.run(predictions, feed_dict={x: xf, y: yf, mask: maskf, seqLen: nVisitsOfEachPatient_List})
+      
+  predictedPatientSlice = predicted_y[:, 0, :]
+  # retrieve actual y from batch tensor -> actual codes, not the hotvector
+  actual_y = batchY[selected_patient_index][0:]
+  # for each admission of the ith-patient
+  for ith_admission in range(nVisitsOfEachPatient_List[0]):
+    # convert array of actual answers to list
+    actualY_list.append(actual_y[ith_admission])
+    # retrieves ith-admission of ths ith-patient
+    ithPrediction = predictedPatientSlice[ith_admission]
+    # since ithPrediction is a vector of probabilties with the same dimensionality of the hotvectors
+    # enumerate is enough to retrieve the original codes
+    enumeratedPrediction = [codeProbability_pair for codeProbability_pair in enumerate(ithPrediction)]
+    # sort everything
+    sortedPredictionsAll = sorted(enumeratedPrediction, key=lambda x: x[1], reverse=True)
+    # creates trimmed list up to max(maxNumberOfAdmissions,30) elements
+    sortedTopPredictions = sortedPredictionsAll[0:max(maxNumberOfAdmissions, 20)]
+    # here we simply toss off the probability and keep only the sorted codes
+    sortedTopPredictions_indexes = [codeProbability_pair[0] for codeProbability_pair in sortedTopPredictions]
+      
+  return actualY_list, sortedTopPredictions_indexes
+
+def testModel():
+  print('==> model loading')
+  session, predictions, x, y, mask, seqLen = loadModel()
+
+  print('==> data loading')
+  testSet, patientsSet = load_data()
   # patientsSet = None
 
   print('==> model execution')
@@ -279,9 +329,21 @@ if __name__ == '__main__':
   # wandb.run.name = ARGS.runName + ARGS.hiddenDimSize + "-" + str(ARGS.attentionDimSize)
 
   patients, predictions = testModel()
+  # actualCodes, predictedCodes = predict()
+  # print("Actual")
+  # print(actualCodes)
+  # print("Predicted")
+  # print(predictedCodes)
+  # print("End")
 
-  with open("855_attentionhcare-271-codes_prediction.csv", "wb") as f:
+  # att-model.24 e att-model.34 sao de 272
+  # att-model.36 e att-model.59 sao de 855
+
+  # new-att-model.37 e new-att-model.23 sao de 855, 271 e 542
+  # new-att-model.26 e new-att-model.24 sao de 272, 271 e 542
+
+  with open("../../272-attentionhcare-542-codes_prediction.csv", "w") as f:
     writer = csv.writer(f)
     for idx, batch in zip(count(step=ARGS.batchSize), predictions):
-  #     writer.writerows(np.array(batch).tolist())
+      # writer.writerows(np.array(batch).tolist())
       writer.writerows(np.column_stack((patients[idx:idx+len(batch)], np.array(batch))).tolist())
